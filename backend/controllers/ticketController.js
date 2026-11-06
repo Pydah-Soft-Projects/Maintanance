@@ -153,8 +153,8 @@ const appendStatus = async (row, status, changedBy, notes) => {
         [
             status,
             JSON.stringify(history),
-            status === 'completed' ? new Date() : row.resolved_at,
-            status === 'closed' ? new Date() : row.closed_at,
+            status === 'completed' ? new Date() : (status === 'pending' ? null : row.resolved_at),
+            status === 'closed' ? new Date() : (status === 'pending' ? null : row.closed_at),
             row.id
         ]
     );
@@ -411,8 +411,10 @@ exports.changeTicketStatus = async (req, res) => {
             const predicate = requesterPredicate(user);
             const ownsComplaint = predicate.value != null &&
                 String(row[predicate.column]) === String(predicate.value);
-            if (!ownsComplaint || status !== 'closed') {
-                return res.status(403).json({ success: false, message: 'Requesters may only close their own complaints' });
+            const isClosing = status === 'closed';
+            const isReopening = status === 'pending' && (row.status === 'completed' || row.status === 'closed');
+            if (!ownsComplaint || (!isClosing && !isReopening)) {
+                return res.status(403).json({ success: false, message: 'Requesters may only close their complaints or re-raise completed ones' });
             }
         }
         await appendStatus(row, status, req.user?.id, notes);
