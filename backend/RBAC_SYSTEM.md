@@ -35,34 +35,29 @@ Permissions are stored as JSON with this structure:
 {
   "ticket_dashboard": { "read": true },
   "ticket_management": { 
-    "read": true, 
+    "read": true,
+    "pending": true,
+    "assigned": true,
+    "resolved": true,
+    "student": true,
+    "faculty": true,
     "write": true, 
     "update": true, 
     "delete": false 
   },
   "employee_management": { 
-    "read": true, 
+    "read": true,
+    "users": true,
+    "roles": false,
     "write": true, 
     "update": false, 
     "delete": false 
   },
-  "category_management": { 
-    "read": true, 
-    "write": false, 
-    "update": false, 
-    "delete": false 
-  },
-  "ticket_reports": { 
-    "read": true, 
-    "write": false, 
-    "update": false, 
-    "delete": false 
-  },
-  "ticket_settings": { 
-    "read": false, 
-    "write": false, 
-    "update": false, 
-    "delete": false 
+  "category_management": {
+    "read": true,
+    "write": false,
+    "update": false,
+    "delete": false
   }
 }
 ```
@@ -72,14 +67,18 @@ Permissions are stored as JSON with this structure:
 1. **ticket_dashboard** - Dashboard access
    - `read`: View Dashboard
 
-2. **ticket_management** - Ticket operations
-   - `read`: View Tickets
+2. **ticket_management** - Task Management
+   - `read`: Open Task Management
+   - `pending`, `assigned`, `resolved`: View the corresponding status tab
+   - `student`, `faculty`: View requests from that requester audience
    - `write`: Create Tickets
    - `update`: Update Tickets (Status, Assignments)
    - `delete`: Delete Tickets
 
-3. **employee_management** - Employee operations
-   - `read`: View Employees
+3. **employee_management** - User Management
+   - `read`: Open User Management
+   - `users`: View the Users tab
+   - `roles`: View the Roles tab (role creation and editing remain administrator-only)
    - `write`: Create Employees
    - `update`: Update Employee Details
    - `delete`: Remove Employees
@@ -90,18 +89,6 @@ Permissions are stored as JSON with this structure:
    - `update`: Update Categories
    - `delete`: Delete Categories
 
-5. **ticket_reports** - Reports & Analytics
-   - `read`: View Reports
-   - `write`: Generate Reports
-   - `update`: Customize Reports
-   - `delete`: Delete Reports
-
-6. **ticket_settings** - System Settings
-   - `read`: View Settings
-   - `write`: Create Settings
-   - `update`: Update Settings
-   - `delete`: Delete Settings
-
 ## Default System Roles
 
 ### Super Admin
@@ -109,18 +96,16 @@ Permissions are stored as JSON with this structure:
 
 ### Admin
 - Full access to tickets and employees
-- Limited access to reports and settings
 - Cannot delete categories or employees
 
 ### Manager (Staff)
 - Can manage tickets and create employees
-- Read-only access to categories and reports
-- No access to settings
+- Read-only access to categories
 
 ### Worker
 - Can view and update assigned tickets
 - Read-only access to categories
-- No access to employee management, reports, or settings
+- No access to employee management
 
 ## API Endpoints
 
@@ -168,9 +153,7 @@ POST /api/roles
     "ticket_dashboard": { "read": true },
     "ticket_management": { "read": true, "write": true, "update": true, "delete": true },
     "employee_management": { "read": true, "write": true, "update": true, "delete": false },
-    "category_management": { "read": true, "write": false, "update": false, "delete": false },
-    "ticket_reports": { "read": true, "write": true, "update": false, "delete": false },
-    "ticket_settings": { "read": true, "write": false, "update": false, "delete": false }
+    "category_management": { "read": true, "write": false, "update": false, "delete": false }
   }
 }
 ```

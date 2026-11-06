@@ -118,7 +118,7 @@ const AdminDashboard = () => {
 
                         <div
                             className="card-base hover:shadow-md cursor-pointer transition-all bg-white"
-                            onClick={() => navigate('/employees')}
+                            onClick={() => navigate('/user-management')}
                         >
                             <div className="flex items-center gap-4">
                                 <div className="quick-action-icon icon-purple">

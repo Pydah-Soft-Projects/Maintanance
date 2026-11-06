@@ -1,40 +1,45 @@
-import React, { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-    Shield,
-    Plus,
-    Edit,
-    Trash2,
-    X,
-    Check,
-    Search,
-    Lock
-} from 'lucide-react';
-import api from '../../config/api';
+import React, { useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Edit, Search, Shield, ShieldOff } from 'lucide-react';
 import toast from 'react-hot-toast';
+import api from '../../config/api';
 import {
     TICKET_MODULES,
+    TICKET_MODULE_PERMISSIONS,
     TICKET_MODULE_LABELS,
     createDefaultTicketPermissions
 } from '../../constants/ticketRbac';
 import '../../styles/admin-pages.css';
 
+const getPermissions = (permissions) => {
+    if (!permissions) return createDefaultTicketPermissions('sub_admin');
+    if (typeof permissions === 'string') {
+        try {
+            return JSON.parse(permissions);
+        } catch (error) {
+            console.error('Failed to parse sub-admin permissions:', error);
+            toast.error('Saved permissions could not be read; reset them before saving.');
+            return createDefaultTicketPermissions('sub_admin');
+        }
+    }
+    return permissions;
+};
+
 const SubAdminCreation = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [showModal, setShowModal] = useState(false);
     const [editingAdmin, setEditingAdmin] = useState(null);
-    const [formData, setFormData] = useState({
-        name: '',
-        email: '',
-        phone_number: '',
-        password: '',
-        permissions: {}
-    });
-
+    const [employeeNo, setEmployeeNo] = useState('');
+    const [localName, setLocalName] = useState('');
+    const [hrmsSearch, setHrmsSearch] = useState('');
+    const [formPermissions, setFormPermissions] = useState(createDefaultTicketPermissions('sub_admin'));
     const queryClient = useQueryClient();
 
-    // Fetch sub-admins
-    const { data: usersData, isLoading } = useQuery({
+    const {
+        data: users = [],
+        isLoading: usersLoading,
+        isError: usersError
+    } = useQuery({
         queryKey: ['rbac-users'],
         queryFn: async () => {
             const response = await api.get('/rbac/users');
@@ -42,276 +47,270 @@ const SubAdminCreation = () => {
         }
     });
 
-    // Mutations
-    const mutationConfig = {
-        onSuccess: () => {
-            toast.success(editingAdmin ? 'Sub-Admin updated' : 'Sub-Admin created');
-            closeModal();
-            queryClient.invalidateQueries(['rbac-users']);
-        },
-        onError: (err) => toast.error(err.response?.data?.message || 'Operation failed')
+    const {
+        data: directory = [],
+        isLoading: directoryLoading,
+        isError: directoryError
+    } = useQuery({
+        queryKey: ['hrms-directory'],
+        queryFn: async () => {
+            const response = await api.get('/rbac/users/hrms-directory');
+            return response.data?.data || [];
+        }
+    });
+
+    const refreshUserData = () => {
+        queryClient.invalidateQueries({ queryKey: ['rbac-users'] });
+        queryClient.invalidateQueries({ queryKey: ['hrms-directory'] });
     };
 
-    const createMutation = useMutation({
-        mutationFn: (data) => api.post('/rbac/users', { ...data, role: 'sub_admin' }),
-        ...mutationConfig
-    });
+    const saveMutation = useMutation({
+        mutationFn: async () => {
+            if (editingAdmin) {
+                return api.put(`/rbac/users/${editingAdmin.id}/access`, {
+                    name: localName,
+                    role: 'sub_admin',
+                    permissions: formPermissions
+                });
+            }
 
-    const updateMutation = useMutation({
-        mutationFn: ({ id, data }) => api.put(`/rbac/users/${id}`, data),
-        ...mutationConfig
-    });
+            const employee = directory.find((item) => item.employee_no === employeeNo);
+            if (!employee) throw new Error('Select an active HRMS employee');
 
-    const deleteMutation = useMutation({
-        mutationFn: (id) => api.delete(`/rbac/users/${id}`),
-        onSuccess: () => {
-            toast.success('Sub-Admin removed');
-            queryClient.invalidateQueries(['rbac-users']);
+            const linkResponse = await api.post('/rbac/users/hrms-link', {
+                employee_no: employee.employee_no,
+                local_name: localName,
+                ...(employee.rbac_user_id ? { rbac_user_id: employee.rbac_user_id } : {})
+            });
+            const userId = linkResponse.data?.data?.id;
+            if (!userId) throw new Error('HRMS user link returned no ticket-app user ID');
+
+            return api.put(`/rbac/users/${userId}/access`, {
+                role: 'sub_admin',
+                permissions: formPermissions
+            });
         },
-        onError: (err) => toast.error('Failed to delete')
+        onSuccess: () => {
+            toast.success(editingAdmin ? 'Sub-admin access updated' : 'HRMS user granted sub-admin access');
+            setShowModal(false);
+            refreshUserData();
+        },
+        onError: (error) => toast.error(error.response?.data?.message || error.message || 'Failed to save access')
     });
 
-    // Filtering
-    const users = usersData || [];
-    const subAdmins = users.filter(user =>
-        user.role === 'sub_admin' &&
-        (user.name.toLowerCase().includes(searchTerm.toLowerCase()) || user.email.includes(searchTerm.toLowerCase()))
-    );
+    const removeAccessMutation = useMutation({
+        mutationFn: (id) => api.put(`/rbac/users/${id}/access`, { role: 'staff', permissions: {} }),
+        onSuccess: () => {
+            toast.success('Sub-admin access removed');
+            refreshUserData();
+        },
+        onError: (error) => toast.error(error.response?.data?.message || 'Failed to remove sub-admin access')
+    });
 
-    // Handlers
+    const subAdmins = useMemo(() => users.filter((user) =>
+        user.role === 'sub_admin' &&
+        `${user.name || ''} ${user.email || ''}`.toLowerCase().includes(searchTerm.toLowerCase())
+    ), [users, searchTerm]);
+
     const openModal = (admin = null) => {
-        if (admin) {
-            setEditingAdmin(admin);
-            setFormData({
-                name: admin.name,
-                email: admin.email,
-                phone_number: admin.phone_number || '',
-                password: '',
-                permissions: admin.permissions || createDefaultTicketPermissions('sub_admin')
-            });
-        } else {
-            setEditingAdmin(null);
-            setFormData({
-                name: '',
-                email: '',
-                phone_number: '',
-                password: '',
-                permissions: createDefaultTicketPermissions('sub_admin') // All false by default for sub_admin
-            });
-        }
+        setEditingAdmin(admin);
+        setEmployeeNo('');
+        setLocalName(admin?.name || '');
+        setHrmsSearch('');
+        setFormPermissions(admin
+            ? getPermissions(admin.permissions)
+            : createDefaultTicketPermissions('sub_admin'));
         setShowModal(true);
     };
 
-    const closeModal = () => {
-        setShowModal(false);
-        setEditingAdmin(null);
-    };
-
     const togglePermission = (module, action) => {
-        setFormData(prev => ({
-            ...prev,
-            permissions: {
-                ...prev.permissions,
-                [module]: {
-                    ...prev.permissions?.[module],
-                    [action]: !prev.permissions?.[module]?.[action]
-                }
+        setFormPermissions((previous) => ({
+            ...previous,
+            [module]: {
+                ...previous[module],
+                [action]: !previous[module]?.[action]
             }
         }));
     };
 
-    const handleSubmit = () => {
-        if (!formData.name || !formData.email) return toast.error('Name and Email required');
-
-        if (editingAdmin) {
-            const updateData = { ...formData };
-            if (!updateData.password) delete updateData.password;
-            updateMutation.mutate({ id: editingAdmin.id, data: updateData });
-        } else {
-            if (!formData.password) return toast.error('Password required');
-            createMutation.mutate(formData);
-        }
-    };
-
-    if (isLoading) {
+    if (usersLoading || directoryLoading) {
+        return <div className="card-base p-6 text-sm text-slate-500">Loading users and HRMS directory...</div>;
+    }
+    if (usersError || directoryError) {
         return (
-            <div className="admin-page-container animate-pulse">
-                <div className="card-base p-0">
-                    <div className="p-4 border-b">
-                        <div className="h-10 bg-gray-200 rounded w-64"></div>
-                    </div>
-                    <div className="p-6 space-y-4">
-                        {[1, 2, 3].map((i) => (
-                            <div key={i} className="border rounded-lg p-6 flex flex-col gap-4">
-                                <div className="flex justify-between items-center">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-12 h-12 bg-gray-200 rounded-xl"></div>
-                                        <div>
-                                            <div className="h-5 bg-gray-200 rounded w-40 mb-2"></div>
-                                            <div className="h-4 bg-gray-200 rounded w-64"></div>
-                                        </div>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <div className="h-9 w-24 bg-gray-200 rounded"></div>
-                                        <div className="h-9 w-10 bg-gray-200 rounded"></div>
-                                    </div>
-                                </div>
-                                <div className="border-t pt-4 mt-2">
-                                    <div className="h-4 bg-gray-200 rounded w-32 mb-3"></div>
-                                    <div className="flex gap-2">
-                                        <div className="h-6 w-24 bg-gray-200 rounded"></div>
-                                        <div className="h-6 w-24 bg-gray-200 rounded"></div>
-                                        <div className="h-6 w-24 bg-gray-200 rounded"></div>
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
+            <div className="card-base p-6 text-sm text-red-700">
+                User records or the HRMS directory could not be loaded. Check the connection and try again.
             </div>
         );
     }
 
+    const availableEmployees = directory.filter((employee) =>
+        employee.role !== 'sub_admin' &&
+        employee.role !== 'admin' &&
+        employee.role !== 'super_admin'
+    );
+
     return (
         <div className="admin-page-container">
-            <div className="card-base" style={{ padding: 0 }}>
-                <div className="admin-filters-section flex justify-between items-center gap-4 flex-wrap">
+            <div className="card-base p-0">
+                <div className="admin-filters-section flex flex-wrap items-center justify-between gap-4">
                     <div className="input-group-wrapper" style={{ maxWidth: '400px', flex: 1 }}>
                         <Search className="input-icon" size={18} />
                         <input
                             className="input-with-icon"
                             placeholder="Search sub-admins..."
                             value={searchTerm}
-                            onChange={e => setSearchTerm(e.target.value)}
+                            onChange={(event) => setSearchTerm(event.target.value)}
                         />
                     </div>
-                    <button onClick={() => openModal()} className="btn-primary shrink-0">
-                        <Shield size={18} /> <span>Create Sub-Admin</span>
+                    <button type="button" onClick={() => openModal()} className="btn-primary inline-flex items-center gap-2">
+                        <Shield size={17} /> Assign Sub-admin Access
                     </button>
                 </div>
 
-                <div className="p-6 space-y-4">
-                    {subAdmins.length > 0 ? (
-                        subAdmins.map(admin => (
-                            <div key={admin.id} className="admin-list-item">
-                                <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-12 h-12 bg-gray-900 text-white rounded-xl flex items-center justify-center font-bold text-xl shadow-lg shadow-gray-200">
-                                            {admin.name.charAt(0).toUpperCase()}
-                                        </div>
-                                        <div>
-                                            <h3 className="font-bold text-lg text-gray-900">{admin.name}</h3>
-                                            <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
-                                                <span>{admin.email}</span>
-                                                {admin.phone_number && (
-                                                    <span className="flex items-center gap-1 before:content-['•'] before:mr-2">
-                                                        {admin.phone_number}
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <button onClick={() => openModal(admin)} className="btn-secondary text-sm py-2 px-4 flex items-center gap-2">
-                                            <Edit size={14} /> Edit Access
-                                        </button>
-                                        <button onClick={() => { if (window.confirm('Remove admin access?')) deleteMutation.mutate(admin.id); }} className="p-2 border border-gray-200 rounded-lg hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors">
-                                            <Trash2 size={20} />
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {/* Permissions Preview */}
-                                <div className="mt-6 pt-4 border-t border-gray-100">
-                                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Active Permissions</p>
-                                    <div className="flex flex-wrap gap-2">
-                                        {Object.entries(admin.permissions || {}).map(([module, perms]) => {
-                                            const activeCount = Object.values(perms).filter(Boolean).length;
-                                            if (activeCount === 0) return null;
-                                            return (
-                                                <span key={module} className="px-3 py-1 bg-gray-50 text-gray-700 text-xs rounded-lg font-medium border border-gray-200">
-                                                    {TICKET_MODULE_LABELS[module] || module}: <span className="text-blue-600">{activeCount} rights</span>
-                                                </span>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
+                <div className="divide-y divide-slate-100">
+                    {subAdmins.length ? subAdmins.map((admin) => (
+                        <div key={admin.id} className="flex flex-col gap-4 p-5 md:flex-row md:items-center md:justify-between">
+                            <div>
+                                <h3 className="font-semibold text-slate-900">{admin.name}</h3>
+                                <p className="text-sm text-slate-500">
+                                    {admin.email} {admin.hrms_id ? '· HRMS linked' : '· Not linked to HRMS'}
+                                </p>
                             </div>
-                        ))
-                    ) : (
-                        <div className="text-center py-12 text-gray-500">
-                            No Sub-Admins found.
+                            <div className="flex gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => openModal(admin)}
+                                    className="btn-secondary inline-flex items-center gap-2"
+                                >
+                                    <Edit size={15} /> Edit Access
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        if (window.confirm('Remove sub-admin access? The user account will remain active.')) {
+                                            removeAccessMutation.mutate(admin.id);
+                                        }
+                                    }}
+                                    className="btn-secondary inline-flex items-center gap-2 text-red-600"
+                                    disabled={removeAccessMutation.isPending}
+                                >
+                                    <ShieldOff size={15} /> Remove Access
+                                </button>
+                            </div>
                         </div>
+                    )) : (
+                        <div className="p-10 text-center text-sm text-slate-500">No sub-admins found.</div>
                     )}
                 </div>
             </div>
 
-            {/* Modal */}
             {showModal && (
                 <div className="modal-overlay">
                     <div className="modal-content animate-fade-in modal-lg">
                         <div className="modal-header">
-                            <h2 className="modal-title">{editingAdmin ? 'Edit Administrator' : 'Create Administrator'}</h2>
-                            <button onClick={closeModal} className="modal-close-btn"><X size={24} /></button>
+                            <div>
+                                <h2 className="modal-title">{editingAdmin ? 'Edit Sub-admin Access' : 'Assign Sub-admin Access'}</h2>
+                                <p className="text-sm text-slate-500">
+                                    {editingAdmin
+                                        ? `${editingAdmin.name} · account managed by HRMS`
+                                        : 'Select an HRMS employee. Create the account in HRMS first.'}
+                                </p>
+                            </div>
+                            <button type="button" onClick={() => setShowModal(false)} className="modal-close-btn" aria-label="Close">
+                                ×
+                            </button>
                         </div>
                         <div className="modal-body">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                                <div>
-                                    <label className="form-label">Full Name</label>
-                                    <input className="form-input" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
+                            {!editingAdmin && (
+                                <div className="mb-6">
+                                    <label className="form-label" htmlFor="hrms-sub-admin-search">Search HRMS employees</label>
+                                    <input
+                                        id="hrms-sub-admin-search"
+                                        className="form-input mb-3"
+                                        value={hrmsSearch}
+                                        onChange={(event) => setHrmsSearch(event.target.value)}
+                                        placeholder="Search by employee number or name"
+                                    />
+                                    <select
+                                        id="hrms-sub-admin"
+                                        className="form-input"
+                                        value={employeeNo}
+                                        onChange={(event) => {
+                                            const selectedNo = event.target.value;
+                                            setEmployeeNo(selectedNo);
+                                            setLocalName(directory.find((employee) => employee.employee_no === selectedNo)?.name || '');
+                                        }}
+                                    >
+                                        <option value="">Select an HRMS employee</option>
+                                        {availableEmployees.filter((employee) =>
+                                            `${employee.employee_no} ${employee.name}`.toLowerCase().includes(hrmsSearch.toLowerCase())
+                                        ).map((employee) => (
+                                            <option key={employee.id} value={employee.employee_no}>
+                                                {employee.employee_no} — {employee.name}{employee.rbac_user_id ? ' (linked)' : ''}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {employeeNo && (
+                                        <label className="mt-4 block">
+                                            <span className="form-label">Ticket-app display name</span>
+                                            <input
+                                                className="form-input"
+                                                value={localName}
+                                                onChange={(event) => setLocalName(event.target.value)}
+                                                maxLength={255}
+                                                required
+                                            />
+                                        </label>
+                                    )}
                                 </div>
-                                <div>
-                                    <label className="form-label">Email Address</label>
-                                    <input className="form-input" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} />
+                            )}
+                            {editingAdmin && (
+                                <div className="mb-6">
+                                    <label className="form-label" htmlFor="ticket-sub-admin-name">Ticket-app display name</label>
+                                    <input
+                                        id="ticket-sub-admin-name"
+                                        className="form-input"
+                                        value={localName}
+                                        onChange={(event) => setLocalName(event.target.value)}
+                                        maxLength={255}
+                                        required
+                                    />
                                 </div>
-                                <div>
-                                    <label className="form-label">Phone</label>
-                                    <input className="form-input" value={formData.phone_number} onChange={e => setFormData({ ...formData, phone_number: e.target.value })} />
-                                </div>
-                                <div>
-                                    <label className="form-label">Password {editingAdmin && '(Optional)'}</label>
-                                    <input className="form-input" type="password" value={formData.password} onChange={e => setFormData({ ...formData, password: e.target.value })} />
-                                </div>
-                            </div>
-
-                            <div className="space-y-6">
-                                <h3 className="font-bold text-gray-900 border-b pb-2">Module Permissions</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-h-96 overflow-y-auto pr-2 custom-scrollbar">
-                                    {Object.values(TICKET_MODULES).map((module) => (
-                                        <div key={module} className="border border-gray-200 rounded-xl p-4 bg-gray-50/50">
-                                            <div className="flex items-center gap-2 mb-3">
-                                                <Lock size={16} className="text-gray-400" />
-                                                <span className="font-bold text-gray-700">{TICKET_MODULE_LABELS[module] || module}</span>
-                                            </div>
-                                            <div className="flex gap-2">
-                                                {['read', 'write', 'update', 'delete'].map(action => (
-                                                    <label key={action} className={`flex-1 flex flex-col items-center justify-center p-2 rounded-lg cursor-pointer border-2 transition-all ${formData.permissions?.[module]?.[action]
-                                                        ? 'border-blue-500 bg-blue-50 text-blue-700'
-                                                        : 'border-transparent bg-white hover:bg-gray-100'
-                                                        }`}>
-                                                        <input
-                                                            type="checkbox"
-                                                            className="hidden"
-                                                            checked={formData.permissions?.[module]?.[action] || false}
-                                                            onChange={() => togglePermission(module, action)}
-                                                        />
-                                                        <span className="text-[10px] font-bold uppercase mb-1">{action}</span>
-                                                        <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${formData.permissions?.[module]?.[action] ? 'bg-blue-500 border-blue-500' : 'border-gray-300'
-                                                            }`}>
-                                                            {formData.permissions?.[module]?.[action] && <Check size={10} className="text-white" />}
-                                                        </div>
-                                                    </label>
-                                                ))}
-                                            </div>
+                            )}
+                            <h3 className="mb-4 border-b pb-2 font-bold text-slate-900">Module Permissions</h3>
+                            <div className="grid max-h-96 grid-cols-1 gap-4 overflow-y-auto md:grid-cols-2">
+                                {Object.values(TICKET_MODULES).map((module) => (
+                                    <div key={module} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                        <p className="mb-3 font-semibold text-slate-700">
+                                            {TICKET_MODULE_LABELS[module] || module}
+                                        </p>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {Object.entries(TICKET_MODULE_PERMISSIONS[module].labels).map(([action, label]) => (
+                                                <label key={action} className="flex flex-1 flex-col items-center gap-1 rounded-lg bg-white p-2 text-xs">
+                                                    <span>{label}</span>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={Boolean(formPermissions[module]?.[action])}
+                                                        onChange={() => togglePermission(module, action)}
+                                                        aria-label={`${TICKET_MODULE_LABELS[module] || module} ${action}`}
+                                                    />
+                                                </label>
+                                            ))}
                                         </div>
-                                    ))}
-                                </div>
+                                    </div>
+                                ))}
                             </div>
-
                         </div>
-                        <div className="modal-footer">
-                            <button onClick={handleSubmit} className="btn-primary w-full md:w-auto">
-                                {createMutation.isPending || updateMutation.isPending ? 'Saving...' : 'Save Administrator'}
+                        <div className="modal-footer flex justify-end gap-3">
+                            <button type="button" className="btn-secondary" onClick={() => setShowModal(false)}>Cancel</button>
+                            <button
+                                type="button"
+                                className="btn-primary"
+                                onClick={() => saveMutation.mutate()}
+                                disabled={saveMutation.isPending || !localName.trim() || (!editingAdmin && !employeeNo)}
+                            >
+                                {saveMutation.isPending ? 'Saving...' : 'Save Access'}
                             </button>
                         </div>
                     </div>

@@ -5,7 +5,6 @@ import {
     ClipboardList,
     Settings,
     Users,
-    Shield,
     LogOut,
     Menu
 } from 'lucide-react';
@@ -16,7 +15,7 @@ const AdminLayout = () => {
     // State
     const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true);
     const navigate = useNavigate();
-    const { user, logout } = useAuthStore();
+    const { user, logout, hasPermission } = useAuthStore();
 
     const handleLogout = () => {
         logout();
@@ -25,8 +24,6 @@ const AdminLayout = () => {
     };
 
     const isSuperAdminOrAdmin = user?.role === 'super_admin' || user?.role === 'admin';
-    const isWorker = Boolean(user?.role === 'worker' || user?.is_worker);
-
     // --- Navigation Configuration ---
     const allNavItems = [
         {
@@ -34,7 +31,6 @@ const AdminLayout = () => {
             icon: LayoutDashboard,
             label: 'Dashboard',
             path: '/dashboard',
-            hideForWorker: true,
             module: 'ticket_dashboard'
         },
         {
@@ -49,30 +45,14 @@ const AdminLayout = () => {
             icon: Settings,
             label: 'Configuration',
             path: '/configuration',
-            hideForWorker: true,
             module: 'category_management'
         },
         {
-            id: 'employees',
+            id: 'user-management',
             icon: Users,
-            label: 'Employees',
-            path: '/employees',
-            hideForWorker: true,
+            label: 'User Management',
+            path: '/user-management',
             module: 'employee_management'
-        },
-        {
-            id: 'sub-admins',
-            icon: Shield,
-            label: 'Sub Admins',
-            path: '/sub-admins',
-            adminOnly: true
-        },
-        {
-            id: 'roles',
-            icon: Shield,
-            label: 'Role Management',
-            path: '/roles',
-            adminOnly: true
         }
     ];
 
@@ -82,33 +62,11 @@ const AdminLayout = () => {
             return isSuperAdminOrAdmin;
         }
 
-        if (isWorker && item.hideForWorker) {
-            return false;
-        }
-
         if (isSuperAdminOrAdmin) {
             return true;
         }
 
-        if (isWorker && item.id === 'task-management') {
-            return true;
-        }
-
-        // Check granular permissions for this module
-        if (item.module && user?.permissions) {
-            const perm = user.permissions[item.module];
-            if (perm) {
-                if (typeof perm === 'boolean') return perm;
-                if (typeof perm === 'object') return Object.values(perm).some((v) => v === true);
-            }
-        }
-
-        // Default for managers/staff with manage access without explicit perms: allow dashboard and task management
-        if (!isWorker && ['dashboard', 'task-management'].includes(item.id)) {
-            return true;
-        }
-
-        return false;
+        return hasPermission(item.module, 'read');
     });
 
     // --- Inline Styles & Media Queries (Matching StudentLayout) ---

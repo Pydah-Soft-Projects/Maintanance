@@ -7,17 +7,14 @@ import {
     ChevronRight,
     Folder,
     Target,
-    User,
-    Mail,
-    Phone,
-    Lock,
     Shield,
     Briefcase,
     UserCircle,
     ArrowRight,
     ArrowLeft,
-    Hash,
-    Zap,
+    Mail,
+    Phone,
+    Info,
     CheckCircle2
 } from 'lucide-react';
 import api from '../../config/api';
@@ -26,44 +23,51 @@ const EmployeeModal = ({
     isOpen,
     onClose,
     user: editingUser,
-    activeRole,
-    existingUsers,
-    availableRoles,
+    availableRoles = [],
     onSubmit,
-    onCreateNewUser,
     isSubmitting
 }) => {
     const [currentStep, setCurrentStep] = useState(1);
-    const [mode, setMode] = useState('select');
     const [userSearch, setUserSearch] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
+    const [hrmsEmployees, setHrmsEmployees] = useState([]);
+    const [isHrmsLoading, setIsHrmsLoading] = useState(false);
     const [categories, setCategories] = useState([]);
     const [expandedCategories, setExpandedCategories] = useState([]);
+    const [selectedHrmsUser, setSelectedHrmsUser] = useState(null);
+
     const [formData, setFormData] = useState({
-        rbac_user_id: null,
-        role: 'staff',
+        hrms_employee_id: null,
+        hrms_employee_no: '',
+        name: '',
+        role: null,
         custom_role_id: null,
         assigned_categories: [],
-        assigned_subcategories: [],
-        name: '',
-        email: '',
-        phone: '',
-        username: '',
-        password: ''
+        assigned_subcategories: []
     });
 
-    // Dynamic steps configuration
-    const shouldShowRoleSelection = true;
-    const shouldShowCategorySelection = formData.role !== 'worker' && formData.role !== 'ticket_worker';
+    // Dynamic steps configuration: Worker doesn't need category scope selection
+    const isWorker = formData.role === 'worker' || formData.role === 'ticket_worker';
+    const shouldShowCategorySelection = !isWorker;
 
     const steps = [
-        { type: 'info', title: editingUser ? 'Employee Info' : 'Select User', icon: UserCircle },
-        { type: 'role', title: 'Assign Role', icon: Shield },
-        ...(shouldShowCategorySelection ? [{ type: 'categories', title: 'Assign Tasks', icon: Briefcase }] : [])
+        { type: 'info', title: editingUser ? 'User Details' : 'Select HRMS Employee', icon: UserCircle },
+        { type: 'role', title: 'Select Role', icon: Shield },
+        ...(shouldShowCategorySelection ? [{ type: 'categories', title: 'Select Scope', icon: Briefcase }] : [])
     ].map((step, index) => ({ ...step, number: index + 1 }));
 
     const totalSteps = steps.length;
     const currentStepObj = steps[currentStep - 1] || steps[0];
 
+    // Debounce search input (300ms)
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearch(userSearch);
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [userSearch]);
+
+    // Fetch categories on open
     useEffect(() => {
         if (isOpen) {
             fetchCategories();
@@ -84,67 +88,100 @@ const EmployeeModal = ({
         }
     };
 
+    // Live search HRMS employees
+    useEffect(() => {
+        if (!isOpen || editingUser) return;
+
+        let isMounted = true;
+        const fetchHrms = async () => {
+            setIsHrmsLoading(true);
+            try {
+                const response = await api.get('/employees/hrms-directory', {
+                    params: debouncedSearch ? { search: debouncedSearch } : {}
+                });
+                if (isMounted) {
+                    setHrmsEmployees(response.data?.data || []);
+                }
+            } catch (err) {
+                console.error('Failed to query HRMS directory:', err);
+            } finally {
+                if (isMounted) setIsHrmsLoading(false);
+            }
+        };
+
+        fetchHrms();
+        return () => { isMounted = false; };
+    }, [isOpen, editingUser, debouncedSearch]);
+
     useEffect(() => {
         if (isOpen) {
             setUserSearch('');
+            setDebouncedSearch('');
             setCurrentStep(1);
 
             if (editingUser) {
-                setMode('edit');
+                setSelectedHrmsUser({
+                    emp_no: editingUser.username,
+                    name: editingUser.name,
+                    email: editingUser.email,
+                    phone: editingUser.phone
+                });
                 setFormData({
                     id: editingUser.id,
-                    rbac_user_id: editingUser.rbac_user_id,
-                    role: editingUser.role,
+                    hrms_employee_id: editingUser.hrms_id || null,
+                    hrms_employee_no: editingUser.username || '',
+                    name: editingUser.name || '',
+                    role: editingUser.role || null,
                     custom_role_id: editingUser.custom_role_id || null,
                     assigned_categories: editingUser.assigned_categories || [],
                     assigned_subcategories: editingUser.assigned_subcategories || []
                 });
                 setExpandedCategories(editingUser.assigned_categories || []);
-                setCurrentStep(2);
             } else {
-                setMode('select');
+                setSelectedHrmsUser(null);
                 setFormData({
-                    rbac_user_id: null,
+                    hrms_employee_id: null,
+                    hrms_employee_no: '',
+                    name: '',
                     role: null,
                     custom_role_id: null,
                     assigned_categories: [],
-                    assigned_subcategories: [],
-                    name: '',
-                    email: '',
-                    phone: '',
-                    username: '',
-                    password: ''
+                    assigned_subcategories: []
                 });
                 setExpandedCategories([]);
             }
         }
-    }, [isOpen, editingUser, activeRole]);
+    }, [isOpen, editingUser]);
+
+    const handleSelectHrmsUser = (employee) => {
+        if (employee.is_already_added) return;
+        setSelectedHrmsUser(employee);
+        setFormData(prev => ({
+            ...prev,
+            hrms_employee_id: employee.id,
+            hrms_employee_no: employee.emp_no,
+            name: employee.name || employee.employee_name || employee.emp_no
+        }));
+    };
 
     const handleSubmit = () => {
+        if (!editingUser && !formData.hrms_employee_id) return;
+        if (!formData.name?.trim()) return;
         if (!formData.role) return;
 
-        if (mode === 'create') {
-            const isWorker = formData.role === 'worker' || formData.role === 'ticket_worker';
-            if (!formData.name || (!isWorker && !formData.email) || !formData.username || !formData.password) {
-                return;
-            }
-            onCreateNewUser(formData);
-        } else {
-            const type = editingUser ? 'update' : 'assign';
-            onSubmit(type, formData);
-        }
+        onSubmit(editingUser ? 'update' : 'create', formData);
     };
 
     const canProceedToNextStep = () => {
         if (currentStepObj.type === 'info') {
-            if (mode === 'select') return formData.rbac_user_id !== null;
-            if (mode === 'create') {
-                const isWorker = formData.role === 'worker' || formData.role === 'ticket_worker';
-                const hasPhone = isWorker ? !!formData.phone : true;
-                return formData.name && (isWorker || formData.email) && formData.username && formData.password && hasPhone;
+            if (!editingUser) {
+                return Boolean(formData.hrms_employee_id && formData.name.trim());
             }
+            return Boolean(formData.name.trim());
         }
-        if (currentStepObj.type === 'role') return formData.role !== null;
+        if (currentStepObj.type === 'role') {
+            return Boolean(formData.role);
+        }
         return true;
     };
 
@@ -222,16 +259,19 @@ const EmployeeModal = ({
                 {/* Header */}
                 <div className="employee-modal-header">
                     <div>
-                        <h2 className="employee-modal-title">{editingUser ? 'Edit Employee' : 'Add New Employee'}</h2>
+                        <h2 className="employee-modal-title">{editingUser ? 'Edit User' : 'Create User from HRMS'}</h2>
                         <p className="employee-modal-subtitle">
-                            {currentStep === 1 ? (editingUser ? 'Update basic information' : 'Select or create a user account') :
-                                currentStep === 2 ? 'Assign a role to this employee' :
-                                    'Configure category responsibilities'}
+                            {currentStep === 1
+                                ? (editingUser ? 'Update user display name' : 'Search & select an active employee from HRMS')
+                                : currentStep === 2
+                                    ? 'Assign ticket access role'
+                                    : 'Configure category responsibilities'}
                         </p>
                     </div>
                     <button
                         onClick={onClose}
                         className="employee-modal-close-btn"
+                        type="button"
                     >
                         <X size={24} />
                     </button>
@@ -271,176 +311,142 @@ const EmployeeModal = ({
 
                 {/* Body - Scrollable Area */}
                 <div className="employee-modal-content custom-scrollbar">
-                    {/* Step 1: Select/Create User */}
+                    {/* Step 1: Select HRMS Employee (Create mode) */}
                     {currentStepObj.type === 'info' && !editingUser && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                            {/* Tab Switcher */}
-                            <div className="user-type-switcher">
-                                <div className="user-type-bg">
-                                    <button
-                                        className={`user-type-btn ${mode === 'select' ? 'active' : ''}`}
-                                        onClick={() => setMode('select')}
-                                    >
-                                        Select Existing
-                                    </button>
-                                    <button
-                                        className={`user-type-btn ${mode === 'create' ? 'active' : ''}`}
-                                        onClick={() => setMode('create')}
-                                    >
-                                        Create New
-                                    </button>
+                        <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', maxWidth: '42rem', margin: '0 auto', width: '100%' }}>
+                            <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs text-blue-900 flex items-start gap-2.5">
+                                <Info size={16} className="text-blue-600 shrink-0 mt-0.5" />
+                                <div>
+                                    <p className="font-semibold">HRMS Directory Search</p>
+                                    <p className="text-blue-700 mt-0.5">
+                                        Select an employee from the HRMS connection. Only this selected user will be added to the ticket database. Passwords are validated through HRMS during login.
+                                    </p>
                                 </div>
                             </div>
 
-                            {mode === 'select' ? (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxWidth: '42rem', margin: '0 auto', width: '100%' }}>
-                                    <div className="user-search-container">
-                                        <div className="user-search-icon">
-                                            <Search className="h-5 w-5" />
-                                        </div>
-                                        <input
-                                            className="user-search-input"
-                                            placeholder="Search database for users..."
-                                            value={userSearch}
-                                            onChange={e => setUserSearch(e.target.value)}
-                                            autoFocus
-                                        />
-                                    </div>
+                            {/* Search Bar */}
+                            <div className="user-search-container">
+                                <div className="user-search-icon">
+                                    <Search className="h-5 w-5" />
+                                </div>
+                                <input
+                                    className="user-search-input"
+                                    placeholder="Search HRMS by employee ID, name, or phone number..."
+                                    value={userSearch}
+                                    onChange={e => setUserSearch(e.target.value)}
+                                    autoFocus
+                                />
+                            </div>
 
-                                    <div className="user-list-grid custom-scrollbar">
-                                        {existingUsers?.filter(u =>
-                                            u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
-                                            u.email?.toLowerCase().includes(userSearch.toLowerCase())
-                                        ).map(user => (
+                            {/* Employee Results */}
+                            <div className="user-list-grid custom-scrollbar">
+                                {isHrmsLoading ? (
+                                    <div style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--gray-500)' }}>
+                                        <div style={{ width: '1.5rem', height: '1.5rem', border: '2px solid #3b82f6', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 0.5rem' }} />
+                                        <span style={{ fontSize: '0.875rem' }}>Searching HRMS directory...</span>
+                                    </div>
+                                ) : hrmsEmployees.length > 0 ? (
+                                    hrmsEmployees.map(emp => {
+                                        const isSelected = formData.hrms_employee_id === emp.id;
+                                        const isAlreadyAdded = emp.is_already_added;
+
+                                        return (
                                             <div
-                                                key={user.id}
-                                                onClick={() => setFormData({ ...formData, rbac_user_id: user.id })}
-                                                className={`user-select-card ${formData.rbac_user_id === user.id ? 'selected' : ''}`}
+                                                key={emp.id}
+                                                onClick={() => !isAlreadyAdded && handleSelectHrmsUser(emp)}
+                                                className={`user-select-card ${isSelected ? 'selected' : ''}`}
+                                                style={isAlreadyAdded ? { opacity: 0.55, cursor: 'not-allowed', backgroundColor: 'var(--gray-50)' } : {}}
                                             >
                                                 <div className="user-avatar">
-                                                    {user.name.charAt(0)}
+                                                    {(emp.name || emp.emp_no || 'E').charAt(0).toUpperCase()}
                                                 </div>
-                                                <div style={{ flex: 1 }}>
-                                                    <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--gray-900)' }}>{user.name}</div>
-                                                    <div style={{ fontSize: '0.75rem', color: 'var(--gray-500)' }}>{user.email}</div>
+                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                        <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--gray-900)' }}>
+                                                            {emp.name || emp.employee_name}
+                                                        </span>
+                                                        {isAlreadyAdded && (
+                                                            <span style={{ fontSize: '0.6875rem', fontWeight: 700, padding: '0.125rem 0.375rem', borderRadius: '0.25rem', backgroundColor: '#e2e8f0', color: '#475569' }}>
+                                                                Already Added
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div style={{ fontSize: '0.75rem', color: 'var(--gray-500)', marginTop: '0.125rem' }}>
+                                                        ID: <strong style={{ color: 'var(--gray-700)' }}>{emp.emp_no}</strong>
+                                                        {emp.email ? ` · ${emp.email}` : ''}
+                                                        {emp.phone ? ` · ${emp.phone}` : ''}
+                                                    </div>
                                                 </div>
                                                 <div className="user-check-indicator">
-                                                    {formData.rbac_user_id === user.id && <Check size={12} style={{ color: 'white' }} strokeWidth={3} />}
+                                                    {isSelected && <Check size={12} style={{ color: 'white' }} strokeWidth={3} />}
                                                 </div>
                                             </div>
-                                        ))}
-                                        {existingUsers?.length === 0 && (
-                                            <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gray-500)' }}>
-                                                No users found
-                                            </div>
-                                        )}
+                                        );
+                                    })
+                                ) : (
+                                    <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--gray-500)', fontSize: '0.875rem' }}>
+                                        No active employees found matching &ldquo;{userSearch}&rdquo; in HRMS.
                                     </div>
-                                </div>
-                            ) : (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-                                    {/* Section 1: Basic Information */}
-                                    <div className="form-group-container">
-                                        <h2 className="employee-section-title">
-                                            <div className="employee-section-dot"></div>
-                                            Basic Information
-                                        </h2>
-                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.25rem' }}>
-                                            <div style={{ gridColumn: '1 / -1' }}>
-                                                <label className="form-label">
-                                                    Full Name <span style={{ color: 'var(--red-500)' }}>*</span>
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    className="form-input"
-                                                    value={formData.name}
-                                                    onChange={e => setFormData({ ...formData, name: e.target.value })}
-                                                    placeholder="Enter full name"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="form-label">
-                                                    Email {formData.role !== 'worker' && <span style={{ color: 'var(--red-500)' }}>*</span>}
-                                                </label>
-                                                <input
-                                                    type="email"
-                                                    className="form-input"
-                                                    value={formData.email}
-                                                    onChange={e => setFormData({ ...formData, email: e.target.value })}
-                                                    placeholder="john@example.com"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="form-label">
-                                                    Phone {formData.role === 'worker' ? <span style={{ color: 'var(--red-500)' }}>*</span> : '(Optional)'}
-                                                </label>
-                                                <input
-                                                    type="tel"
-                                                    className="form-input"
-                                                    value={formData.phone}
-                                                    onChange={e => setFormData({ ...formData, phone: e.target.value })}
-                                                    placeholder="+91 00000 00000"
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
+                                )}
+                            </div>
 
-                                    {/* Section 2: Account Credentials */}
-                                    <div className="form-group-container">
-                                        <h2 className="employee-section-title">
-                                            <div className="employee-section-dot credentials"></div>
-                                            Account Credentials
-                                        </h2>
-                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.25rem' }}>
-                                            <div>
-                                                <label className="form-label">
-                                                    Username <span style={{ color: 'var(--red-500)' }}>*</span>
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    className="form-input"
-                                                    value={formData.username}
-                                                    onChange={e => setFormData({ ...formData, username: e.target.value })}
-                                                    placeholder="johndoe"
-                                                    autoComplete="off"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="form-label">
-                                                    Password <span style={{ color: 'var(--red-500)' }}>*</span>
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    className="form-input"
-                                                    value={formData.password}
-                                                    onChange={e => setFormData({ ...formData, password: e.target.value })}
-                                                    placeholder="••••••••"
-                                                    autoComplete="new-password"
-                                                />
-                                            </div>
-                                        </div>
+                            {/* Selected Employee Customization */}
+                            {selectedHrmsUser && (
+                                <div style={{ borderTop: '1px solid var(--gray-200)', paddingTop: '1rem' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem', color: 'var(--green-700)', fontSize: '0.875rem', fontWeight: 600 }}>
+                                        <CheckCircle2 size={18} />
+                                        <span>Selected HRMS Employee: {selectedHrmsUser.name} ({selectedHrmsUser.emp_no})</span>
                                     </div>
+                                    <label className="form-label" htmlFor="ticket-employee-name">
+                                        Ticket-app Display Name <span style={{ color: 'var(--red-500)' }}>*</span>
+                                    </label>
+                                    <input
+                                        id="ticket-employee-name"
+                                        className="form-input"
+                                        value={formData.name}
+                                        onChange={(event) => setFormData({ ...formData, name: event.target.value })}
+                                        maxLength={255}
+                                        required
+                                    />
                                 </div>
                             )}
                         </div>
                     )}
 
-                    {/* Step 1: Editing User Info */}
+                    {/* Step 1: User Info (Edit mode) */}
                     {currentStepObj.type === 'info' && editingUser && (
-                        <div className="animate-fade-in">
-                            <div className="edit-user-highlight">
-                                <div className="edit-user-highlight-bg"></div>
-                                <div style={{ position: 'relative', zIndex: 10, display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-                                    <div style={{ width: '5rem', height: '5rem', borderRadius: '1rem', backgroundColor: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.875rem', fontWeight: 'bold' }}>
-                                        {(editingUser.name || 'E').charAt(0)}
+                        <div className="animate-fade-in" style={{ maxWidth: '36rem', margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                            <div style={{ padding: '1rem', borderRadius: '0.75rem', border: '1px solid var(--gray-200)', backgroundColor: 'var(--gray-50)' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                    <div className="user-avatar" style={{ width: '3rem', height: '3rem', fontSize: '1.25rem' }}>
+                                        {(editingUser.name || 'U').charAt(0).toUpperCase()}
                                     </div>
                                     <div>
-                                        <h3 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '0.25rem' }}>{editingUser.name}</h3>
-                                        <p style={{ color: '#dbeafe', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                            <Mail size={16} />
-                                            {editingUser.email}
+                                        <h3 style={{ fontWeight: 700, color: 'var(--gray-900)' }}>{editingUser.name}</h3>
+                                        <p style={{ fontSize: '0.8125rem', color: 'var(--gray-500)' }}>
+                                            HRMS Username: <strong style={{ color: 'var(--gray-700)' }}>{editingUser.username}</strong>
+                                            {editingUser.email ? ` · ${editingUser.email}` : ''}
                                         </p>
                                     </div>
                                 </div>
+                            </div>
+
+                            <div>
+                                <label className="form-label" htmlFor="user-name">
+                                    Display Name <span style={{ color: 'var(--red-500)' }}>*</span>
+                                </label>
+                                <input
+                                    id="user-name"
+                                    className="form-input"
+                                    value={formData.name}
+                                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                    required
+                                    autoFocus
+                                />
+                            </div>
+
+                            <div style={{ fontSize: '0.75rem', color: 'var(--gray-500)', backgroundColor: 'var(--primary-blue-light)', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #bfdbfe' }}>
+                                Password authentication is verified centrally by HRMS.
                             </div>
                         </div>
                     )}
@@ -450,14 +456,14 @@ const EmployeeModal = ({
                         <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
                             <div style={{ textAlign: 'center' }}>
                                 <h3 className="employee-modal-title">Choose Role</h3>
-                                <p className="employee-modal-subtitle">Select the access level for this employee</p>
+                                <p className="employee-modal-subtitle">Select the access permissions for this user</p>
                             </div>
 
                             <div className="role-select-grid">
                                 {availableRoles && availableRoles.length > 0 ? (
                                     availableRoles.map(role => {
-                                        const isWorker = role.role_name.includes('worker');
-                                        const isSelected = formData.custom_role_id === role.id;
+                                        const isRoleWorker = role.role_name.includes('worker');
+                                        const isSelected = formData.custom_role_id === role.id || formData.role === role.role_name;
 
                                         return (
                                             <button
@@ -468,16 +474,16 @@ const EmployeeModal = ({
                                                     role: role.role_name,
                                                     custom_role_id: role.id
                                                 })}
-                                                className={`role-card ${isSelected ? `active ${isWorker ? 'role-worker' : 'role-staff'}` : ''}`}
+                                                className={`role-card ${isSelected ? `active ${isRoleWorker ? 'role-worker' : 'role-staff'}` : ''}`}
                                             >
-                                                <div className={`role-icon ${isWorker ? 'worker-icon-hover' : ''}`}>
-                                                    {isWorker ? <Briefcase size={28} /> : <Shield size={28} />}
+                                                <div className={`role-icon ${isRoleWorker ? 'worker-icon-hover' : ''}`}>
+                                                    {isRoleWorker ? <Briefcase size={28} /> : <Shield size={28} />}
                                                 </div>
                                                 <h4 style={{ fontWeight: 'bold', fontSize: '1.125rem', color: 'var(--gray-900)', marginBottom: '0.5rem' }}>
                                                     {role.display_name}
                                                 </h4>
                                                 <p style={{ fontSize: '0.875rem', color: 'var(--gray-500)', lineHeight: '1.625' }}>
-                                                    {role.description || 'No description provided.'}
+                                                    {role.description || 'Access to ticket system features.'}
                                                 </p>
 
                                                 {isSelected && (
@@ -502,8 +508,8 @@ const EmployeeModal = ({
                         <div className="category-selection-container animate-fade-in">
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                                 <div>
-                                    <h3 style={{ fontSize: '1.125rem', fontWeight: 'bold', color: 'var(--gray-900)' }}>Assign Categories</h3>
-                                    <p style={{ fontSize: '0.875rem', color: 'var(--gray-500)' }}>Select categories for this manager</p>
+                                    <h3 style={{ fontSize: '1.125rem', fontWeight: 'bold', color: 'var(--gray-900)' }}>Choose Categories</h3>
+                                    <p style={{ fontSize: '0.875rem', color: 'var(--gray-500)' }}>Select categories assigned to this user</p>
                                 </div>
                                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                                     <span style={{ padding: '0.25rem 0.75rem', borderRadius: '9999px', backgroundColor: 'var(--primary-blue-light)', color: 'var(--primary-blue)', fontSize: '0.75rem', fontWeight: 'bold', border: '1px solid #bfdbfe' }}>
@@ -525,6 +531,7 @@ const EmployeeModal = ({
                                         <div key={category.id} style={{ marginBottom: '0.25rem' }}>
                                             <div className={`category-item ${isSelected ? 'selected' : ''}`}>
                                                 <button
+                                                    type="button"
                                                     onClick={(e) => { e.stopPropagation(); toggleCategory(category.id); }}
                                                     className={`expand-btn ${isExpanded ? 'expanded' : ''}`}
                                                 >
@@ -579,33 +586,36 @@ const EmployeeModal = ({
                     )}
                 </div>
 
-                {/* Footer - Sticky at bottom */}
+                {/* Footer */}
                 <div className="employee-modal-footer">
                     <div className="footer-btn-container">
                         <button
-                            onClick={currentStep === 1 && !editingUser ? onClose : handleBack}
+                            type="button"
+                            onClick={currentStep === 1 ? onClose : handleBack}
                             className="btn-back"
                             disabled={isSubmitting}
                         >
                             <ArrowLeft size={16} />
-                            {currentStep === 1 && !editingUser ? 'Cancel' : 'Back'}
+                            {currentStep === 1 ? 'Cancel' : 'Back'}
                         </button>
 
                         <div style={{ display: 'flex', gap: '0.75rem' }}>
                             {currentStep < totalSteps ? (
                                 <button
+                                    type="button"
                                     onClick={handleNext}
                                     disabled={!canProceedToNextStep()}
                                     className="btn-next"
                                 >
-                                    Next Step
+                                    <span>Next Step</span>
                                     <ArrowRight size={16} />
                                 </button>
                             ) : (
                                 <button
+                                    type="button"
                                     onClick={handleSubmit}
-                                    disabled={isSubmitting}
                                     className="btn-submit"
+                                    disabled={isSubmitting || !formData.name.trim() || !formData.role}
                                 >
                                     {isSubmitting ? (
                                         <>
@@ -615,7 +625,7 @@ const EmployeeModal = ({
                                     ) : (
                                         <>
                                             <Check size={18} strokeWidth={2.5} />
-                                            <span>{editingUser ? 'Update Employee' : 'Create Employee'}</span>
+                                            <span>{editingUser ? 'Update User' : 'Register User'}</span>
                                         </>
                                     )}
                                 </button>

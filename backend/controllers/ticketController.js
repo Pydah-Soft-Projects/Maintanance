@@ -2,1441 +2,503 @@ const { masterPool } = require('../config/database');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const { enrichTicketsRequesterNames, normalizeRequesterFields } = require('../utils/requesterNames');
 
-// Safely ensure location columns exist on tickets table
-(async () => {
-    const cols = [
-        'ALTER TABLE tickets ADD COLUMN college_id INT NULL',
-        'ALTER TABLE tickets ADD COLUMN college_name VARCHAR(255) NULL',
-        'ALTER TABLE tickets ADD COLUMN block_no VARCHAR(100) NULL',
-        'ALTER TABLE tickets ADD COLUMN floor_no VARCHAR(100) NULL',
-        'ALTER TABLE tickets ADD COLUMN room_no VARCHAR(100) NULL'
-    ];
-    for (const sql of cols) {
-        try {
-            await masterPool.query(sql);
-        } catch (_) {}
-    }
-})();
-
-const MAX_PHOTO_BYTES = 1024 * 1024;
-
-// tickets.raised_by_hrms_id and rbac_users.hrms_id may use different collations on MySQL 8
-const HRMS_USER_JOIN = `LEFT JOIN rbac_users ru_hrms ON t.raised_by_hrms_id COLLATE utf8mb4_unicode_ci = ru_hrms.hrms_id COLLATE utf8mb4_unicode_ci`;
-
-// Configure multer for ticket photo uploads
 const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        const uploadDir = 'uploads/tickets';
-        if (!fs.existsSync(uploadDir)) {
-            fs.mkdirSync(uploadDir, { recursive: true });
-        }
-        cb(null, uploadDir);
+    destination: (_req, _file, cb) => {
+        const directory = path.join(__dirname, '..', 'uploads', 'tickets');
+        fs.mkdirSync(directory, { recursive: true });
+        cb(null, directory);
     },
-    filename: (req, file, cb) => {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, 'ticket-' + uniqueSuffix + path.extname(file.originalname));
+    filename: (_req, file, cb) => {
+        cb(null, `ticket-${Date.now()}-${Math.round(Math.random() * 1e9)}${path.extname(file.originalname)}`);
     }
 });
 
 const upload = multer({
-    storage: storage,
-    limits: {
-        fileSize: MAX_PHOTO_BYTES
-    },
-    fileFilter: (req, file, cb) => {
-        const allowedTypes = /jpeg|jpg|png|gif|webp/;
-        const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-        const mimetype = allowedTypes.test(file.mimetype);
-
-        if (mimetype && extname) {
-            return cb(null, true);
-        } else {
-            cb(new Error('Only image files are allowed'));
-        }
+    storage,
+    limits: { fileSize: 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+        const allowed = /\.(jpe?g|png|gif|webp)$/i.test(path.extname(file.originalname)) &&
+            /^image\/(jpeg|png|gif|webp)$/i.test(file.mimetype);
+        cb(allowed ? null : new Error('Only image files are allowed'), allowed);
     }
 });
 
-// Export multer upload for routes
 exports.upload = upload;
 
-/**
- * Generate unique ticket number
- */
-const generateTicketNumber = async () => {
-    const prefix = 'TKT';
-    const year = new Date().getFullYear();
-    const timestamp = Date.now().toString().slice(-6);
-    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-    return `${prefix}-${year}-${timestamp}-${random}`;
-};
-
-/**
- * Create a new ticket (student or staff raises complaint)
- */
-exports.createTicket = async (req, res) => {
+const parseJson = (value, fallback = []) => {
+    if (value == null || value === '') return fallback;
+    if (typeof value !== 'string') return value;
     try {
-        const {
-            category_id,
-            sub_category_id,
-            title,
-            description,
-            college_id,
-            college_name,
-            college,
-            block_no,
-            floor_no,
-            room_no
-        } = req.body;
-        const user = req.user || req.student;
-
-        if (!user) {
-            return res.status(401).json({
-                success: false,
-                message: 'Authentication required'
-            });
-        }
-
-        let finalCollegeId = college_id || null;
-        let finalCollegeName = college_name || college || null;
-        let finalBlockNo = block_no ? String(block_no).trim() : null;
-        let finalFloorNo = floor_no ? String(floor_no).trim() : null;
-        let finalRoomNo = room_no ? String(room_no).trim() : null;
-
-        if (finalCollegeId && !finalCollegeName) {
-            try {
-                const [col] = await masterPool.query('SELECT name FROM colleges WHERE id = ?', [finalCollegeId]);
-                if (col.length > 0) {
-                    finalCollegeName = col[0].name;
-                }
-            } catch (_) {}
-        }
-
-        const isStudent = user.role === 'student' || user.admission_number || user.admissionNumber;
-        const isHrmsSession = !!(user.is_hrms_session || user.hrmsId || user.is_hrms_user);
-
-        if (!category_id || !title) {
-            return res.status(400).json({
-                success: false,
-                message: 'Category and title are required'
-            });
-        }
-
-        // Verify category exists and is active
-        const [category] = await masterPool.query(
-            'SELECT id, parent_id, is_active FROM complaint_categories WHERE id = ?',
-            [category_id]
-        );
-
-        if (category.length === 0) {
-            return res.status(400).json({
-                success: false,
-                message: 'Invalid complaint category'
-            });
-        }
-
-        if (!category[0].is_active) {
-            return res.status(400).json({
-                success: false,
-                message: 'This complaint category is not available'
-            });
-        }
-
-        // If sub_category_id is provided, verify it belongs to the category
-        if (sub_category_id) {
-            const [subCategory] = await masterPool.query(
-                'SELECT id, parent_id, is_active FROM complaint_categories WHERE id = ? AND parent_id = ?',
-                [sub_category_id, category_id]
-            );
-
-            if (subCategory.length === 0) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Invalid sub-category for selected category'
-                });
-            }
-
-            if (!subCategory[0].is_active) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'This sub-category is not available'
-                });
-            }
-        }
-
-        let studentId = null;
-        let admissionNumber = null;
-        let requesterType = 'student';
-        let raisedByRbacId = null;
-        let raisedByHrmsId = null;
-        let requesterDisplayName = null;
-
-        if (isStudent) {
-            const admissionNo = user.admission_number || user.admissionNumber;
-            const [studentData] = await masterPool.query(
-                'SELECT id, admission_number, student_name FROM students WHERE admission_number = ?',
-                [admissionNo]
-            );
-
-            if (studentData.length === 0) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Student not found in database. Please contact admin.'
-                });
-            }
-
-            studentId = studentData[0].id;
-            admissionNumber = studentData[0].admission_number;
-            requesterDisplayName = studentData[0].student_name || user.name || null;
-        } else if (isHrmsSession) {
-            requesterType = 'staff';
-            raisedByHrmsId = user.hrmsId || null;
-            requesterDisplayName = user.name || null;
-            admissionNumber = user.username || user.email || (user.hrmsId ? `HRMS-${user.hrmsId}` : `STAFF-${user.id || Date.now()}`);
-            if (user.id) {
-                raisedByRbacId = user.id;
-            } else if (user.hrmsId) {
-                try {
-                    const [matchedRbac] = await masterPool.query(
-                        'SELECT id FROM rbac_users WHERE hrms_id = ? OR email = ? OR username = ? LIMIT 1',
-                        [user.hrmsId, user.email || '', user.username || '']
-                    );
-                    if (matchedRbac.length > 0) {
-                        raisedByRbacId = matchedRbac[0].id;
-                    }
-                } catch (_) {}
-            }
-        } else {
-            let staffUserId = user.id;
-            if (staffUserId) {
-                let [staffUser] = await masterPool.query(
-                    'SELECT id, username, email, name FROM rbac_users WHERE id = ? LIMIT 1',
-                    [staffUserId]
-                );
-
-                if (staffUser.length > 0) {
-                    requesterDisplayName = staffUser[0].name || user.name || null;
-                    admissionNumber = staffUser[0].username || staffUser[0].email || `STAFF-${staffUser[0].id}`;
-                    raisedByRbacId = staffUser[0].id;
-                }
-            }
-
-            if (!raisedByRbacId && user.username) {
-                let [staffUser] = await masterPool.query(
-                    'SELECT id, username, email, name FROM rbac_users WHERE username = ? OR email = ? LIMIT 1',
-                    [user.username, user.username]
-                );
-
-                if (staffUser.length > 0) {
-                    requesterDisplayName = staffUser[0].name || user.name || null;
-                    admissionNumber = staffUser[0].username || staffUser[0].email || `STAFF-${staffUser[0].id}`;
-                    raisedByRbacId = staffUser[0].id;
-                }
-            }
-
-            requesterType = 'staff';
-            if (!raisedByRbacId) {
-                raisedByRbacId = user.id || null;
-                requesterDisplayName = user.name || user.username || 'Staff';
-                admissionNumber = user.username || user.email || `STAFF-${user.id || Date.now()}`;
-            }
-        }
-
-        // Handle photo upload — store file path (not base64) for faster uploads
-        let photoUrl = null;
-        if (req.file) {
-            photoUrl = `/uploads/tickets/${req.file.filename}`;
-        }
-
-        // Generate ticket number
-        const ticketNumber = await generateTicketNumber();
-
-        // Create ticket — support location fields
-        let result;
-        try {
-            [result] = await masterPool.query(
-                `INSERT INTO tickets 
-           (ticket_number, student_id, admission_number, requester_type, raised_by_rbac_id, raised_by_hrms_id, requester_display_name, category_id, sub_category_id, college_id, college_name, block_no, floor_no, room_no, title, description, photo_url, status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
-                [
-                    ticketNumber,
-                    studentId,
-                    admissionNumber,
-                    requesterType,
-                    raisedByRbacId,
-                    raisedByHrmsId,
-                    requesterDisplayName,
-                    category_id,
-                    sub_category_id || null,
-                    finalCollegeId,
-                    finalCollegeName,
-                    finalBlockNo,
-                    finalFloorNo,
-                    finalRoomNo,
-                    title.trim(),
-                    description ? description.trim() : '',
-                    photoUrl
-                ]
-            );
-        } catch (insertError) {
-            if (insertError.code !== 'ER_BAD_FIELD_ERROR') {
-                throw insertError;
-            }
-
-            if (raisedByHrmsId) {
-                [result] = await masterPool.query(
-                    `INSERT INTO tickets 
-               (ticket_number, student_id, admission_number, requester_type, raised_by_rbac_id, raised_by_hrms_id, category_id, sub_category_id, title, description, photo_url, status)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
-                    [
-                        ticketNumber,
-                        studentId,
-                        admissionNumber,
-                        requesterType,
-                        raisedByRbacId,
-                        raisedByHrmsId,
-                        category_id,
-                        sub_category_id || null,
-                        title.trim(),
-                        description ? description.trim() : '',
-                        photoUrl
-                    ]
-                );
-            } else if (isStaffRequester) {
-                return res.status(503).json({
-                    success: false,
-                    message: 'Staff ticket support is still initializing. Please try again in a moment.'
-                });
-            } else {
-                [result] = await masterPool.query(
-                    `INSERT INTO tickets 
-               (ticket_number, student_id, admission_number, category_id, sub_category_id, title, description, photo_url, status)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
-                    [
-                        ticketNumber,
-                        studentId,
-                        admissionNumber,
-                        category_id,
-                        sub_category_id || null,
-                        title.trim(),
-                        description ? description.trim() : '',
-                        photoUrl
-                    ]
-                );
-            }
-        }
-
-        // Keep uploaded file on disk when stored as path URL
-
-        // --- AUTO-ASSIGNMENT LOGIC ---
-        // Find managers (staff) who are assigned to this category
-        try {
-            const [managers] = await masterPool.query(`
-                SELECT rbac_user_id, assigned_categories 
-                FROM ticket_employees 
-                WHERE role = 'staff' AND is_active = 1
-            `);
-
-            const assignedManagerIds = [];
-
-            for (const manager of managers) {
-                let categories = [];
-                try {
-                    categories = typeof manager.assigned_categories === 'string'
-                        ? JSON.parse(manager.assigned_categories)
-                        : manager.assigned_categories;
-                } catch (e) {
-                    console.error('Error parsing categories for auto-assign:', e);
-                    continue;
-                }
-
-                if (Array.isArray(categories)) {
-                    // Convert all to numbers for comparison
-                    const categoryIds = categories.map(c => Number(c));
-                    const targetCategoryId = Number(category_id);
-
-                    console.log(`Checking manager ${manager.rbac_user_id} with categories:`, categoryIds, `against ${targetCategoryId}`);
-
-                    if (categoryIds.includes(targetCategoryId)) {
-                        assignedManagerIds.push(manager.rbac_user_id);
-                        console.log(`>> MATCH! Auto-assigning manager ${manager.rbac_user_id}`);
-                    }
-                }
-            }
-
-            if (assignedManagerIds.length > 0) {
-                // Insert assignments
-                const assignmentValues = assignedManagerIds.map(userId => [
-                    result.insertId,
-                    userId,
-                    null, // assigned_by is null for system/auto-assignment
-                    'Auto-assigned based on Category'
-                ]);
-
-                await masterPool.query(
-                    `INSERT INTO ticket_assignments (ticket_id, assigned_to, assigned_by, notes) VALUES ?`,
-                    [assignmentValues]
-                );
-
-                // Update status to 'approaching' since it's assigned
-                await masterPool.query(
-                    `UPDATE tickets SET status = 'approaching' WHERE id = ?`,
-                    [result.insertId]
-                );
-            } else {
-                console.log('No managers found for auto-assignment for category:', category_id);
-            }
-        } catch (assignError) {
-            console.error('Auto-assignment failed:', assignError);
-            // Don't fail the request, just log it
-        }
-        // -----------------------------
-
-        // Get created ticket
-        const [ticket] = await masterPool.query(
-            `SELECT t.*, 
-        c.name as category_name,
-        sc.name as sub_category_name
-      FROM tickets t
-      LEFT JOIN complaint_categories c ON t.category_id = c.id
-      LEFT JOIN complaint_categories sc ON t.sub_category_id = sc.id
-      WHERE t.id = ?`,
-            [result.insertId]
-        );
-
-        res.status(201).json({
-            success: true,
-            message: 'Ticket created successfully',
-            data: ticket[0]
-        });
+        return JSON.parse(value);
     } catch (error) {
-        console.error('Error creating ticket:', error);
-
-        if (req.file && req.file.path && fs.existsSync(req.file.path)) {
-            fs.unlinkSync(req.file.path);
-        }
-
-        res.status(500).json({
-            success: false,
-            message: 'Error creating ticket',
-            error: error.message
-        });
+        console.error('Invalid JSON stored on complaint:', error.message);
+        return fallback;
     }
 };
 
-/**
- * Get all tickets (admin view with filters)
- */
+const createTicketNumber = () =>
+    `TKT-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
+
+const requesterPredicate = (user) => {
+    if (user.role === 'student' || user.admission_number || user.admissionNumber) {
+        return { column: 'requester_identifier', value: user.admission_number || user.admissionNumber };
+    }
+    if (user.is_hrms_session || user.hrmsId) {
+        return { column: 'requester_hrms_id', value: user.hrmsId || null };
+    }
+    return { column: 'requester_user_id', value: user.id };
+};
+
+const enrichComplaints = async (rows) => {
+    if (!rows.length) return [];
+    const userIds = new Set();
+    rows.forEach((row) => {
+        parseJson(row.assignments).forEach((assignment) => {
+            if (assignment.assigned_to) userIds.add(Number(assignment.assigned_to));
+            if (assignment.assigned_by) userIds.add(Number(assignment.assigned_by));
+        });
+        parseJson(row.comments).forEach((comment) => {
+            if (comment.user_id) userIds.add(Number(comment.user_id));
+        });
+        parseJson(row.status_history).forEach((entry) => {
+            if (entry.changed_by) userIds.add(Number(entry.changed_by));
+        });
+    });
+
+    const usersById = new Map();
+    if (userIds.size) {
+        const [users] = await masterPool.query(
+            'SELECT id, name, username, email, role FROM users WHERE id IN (?)',
+            [[...userIds]]
+        );
+        users.forEach((user) => usersById.set(Number(user.id), user));
+    }
+
+    return rows.map((row) => {
+        const assignments = parseJson(row.assignments).map((assignment) => ({
+            ...assignment,
+            assigned_to_name: usersById.get(Number(assignment.assigned_to))?.name || null,
+            assigned_to_username: usersById.get(Number(assignment.assigned_to))?.username || null,
+            assigned_to_email: usersById.get(Number(assignment.assigned_to))?.email || null,
+            assigned_to_role: usersById.get(Number(assignment.assigned_to))?.role || null,
+            assigned_by_name: usersById.get(Number(assignment.assigned_by))?.name || null
+        })).filter((assignment) => assignment.is_active !== false);
+        const comments = parseJson(row.comments).map((comment) => ({
+            ...comment,
+            user_name: usersById.get(Number(comment.user_id))?.name || comment.user_name || null,
+            user_identifier: usersById.get(Number(comment.user_id))?.username || comment.user_identifier || null
+        }));
+        const statusHistory = parseJson(row.status_history).map((entry) => ({
+            ...entry,
+            changed_by_name: usersById.get(Number(entry.changed_by))?.name || null,
+            changed_by_username: usersById.get(Number(entry.changed_by))?.username || null
+        }));
+        return {
+            ...row,
+            ticket_id: row.complaint_number,
+            ticket_number: row.complaint_number,
+            student_id: row.requester_user_id,
+            student_name: row.requester_name,
+            student_mobile: row.requester_phone,
+            admission_number: row.requester_identifier,
+            raised_by_rbac_id: row.requester_user_id,
+            raised_by_hrms_id: row.requester_hrms_id,
+            requester_display_name: row.requester_name,
+            has_photo: row.photo_url ? 1 : 0,
+            assignments,
+            comments,
+            status_history: statusHistory,
+            feedback: parseJson(row.feedback, null)
+        };
+    });
+};
+
+const getComplaintRow = async (id) => {
+    const [rows] = await masterPool.query(
+        `SELECT c.*, cat.name AS category_name, sub.name AS sub_category_name
+         FROM complaints c
+         LEFT JOIN categories cat ON c.category_id = cat.id
+         LEFT JOIN categories sub ON c.sub_category_id = sub.id
+         WHERE c.id = ?`,
+        [id]
+    );
+    return rows[0] || null;
+};
+
+const saveComplaintJson = async (id, column, value) => {
+    const allowedColumns = ['assignments', 'comments', 'status_history', 'feedback'];
+    if (!allowedColumns.includes(column)) throw new Error('Invalid complaint field');
+    await masterPool.query(
+        `UPDATE complaints SET ${column} = ?, updated_at = NOW() WHERE id = ?`,
+        [value == null ? null : JSON.stringify(value), id]
+    );
+};
+
+const appendStatus = async (row, status, changedBy, notes) => {
+    const history = parseJson(row.status_history);
+    history.unshift({
+        id: Date.now(),
+        old_status: row.status,
+        new_status: status,
+        changed_by: changedBy || null,
+        notes: notes || null,
+        created_at: new Date().toISOString()
+    });
+    await masterPool.query(
+        `UPDATE complaints
+         SET status = ?, status_history = ?, resolved_at = ?,
+             closed_at = ?, updated_at = NOW()
+         WHERE id = ?`,
+        [
+            status,
+            JSON.stringify(history),
+            status === 'completed' ? new Date() : row.resolved_at,
+            status === 'closed' ? new Date() : row.closed_at,
+            row.id
+        ]
+    );
+};
+
+exports.createTicket = async (req, res) => {
+    try {
+        const user = req.user || req.student;
+        const { category_id, sub_category_id, title, description, college_id, college_name, college, block_no, floor_no, room_no } = req.body;
+        if (!user) return res.status(401).json({ success: false, message: 'Authentication required' });
+        if (!category_id || !title?.trim()) {
+            return res.status(400).json({ success: false, message: 'Category and title are required' });
+        }
+
+        const [categories] = await masterPool.query(
+            'SELECT id, parent_id, is_active FROM categories WHERE id = ? AND is_active = 1',
+            [category_id]
+        );
+        if (!categories.length) return res.status(400).json({ success: false, message: 'Invalid complaint category' });
+        if (sub_category_id) {
+            const [subcategories] = await masterPool.query(
+                'SELECT id FROM categories WHERE id = ? AND parent_id = ? AND is_active = 1',
+                [sub_category_id, category_id]
+            );
+            if (!subcategories.length) return res.status(400).json({ success: false, message: 'Invalid sub-category for selected category' });
+        }
+
+        const isStudent = user.role === 'student' || user.admission_number || user.admissionNumber;
+        const isHrms = Boolean(user.is_hrms_session || user.hrmsId || user.is_hrms_user);
+        const userId = Number(user.id) || null;
+        const admissionNumber = user.admission_number || user.admissionNumber || null;
+        if (isStudent && !admissionNumber) {
+            return res.status(400).json({ success: false, message: 'Student admission number is missing from the authenticated profile' });
+        }
+        const requester = !isStudent && userId
+            ? { id: userId, name: user.name, username: user.username }
+            : null;
+        const requesterType = isStudent ? 'student' : 'staff';
+        const requesterIdentifier = isStudent
+            ? admissionNumber
+            : (user.username || user.email || (user.hrmsId ? `HRMS-${user.hrmsId}` : `STAFF-${userId || Date.now()}`));
+        const requesterName = user.name || 'User';
+        const photoUrl = req.file ? `/uploads/tickets/${req.file.filename}` : null;
+        const [result] = await masterPool.query(
+            `INSERT INTO complaints
+             (complaint_number, requester_user_id, requester_type, requester_hrms_id, requester_name,
+              requester_identifier, requester_phone, category_id, sub_category_id, college_id, college_name,
+              block_no, floor_no, room_no, title, description, photo_url, status,
+              assignments, comments, status_history)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', '[]', '[]', '[]')`,
+            [
+                createTicketNumber(),
+                requester?.id || null,
+                requesterType,
+                isHrms && !isStudent ? user.hrmsId || null : null,
+                requesterName,
+                requesterIdentifier,
+                user.phone || user.phone_number || null,
+                category_id,
+                sub_category_id || null,
+                college_id || null,
+                college_name || college || null,
+                block_no || null,
+                floor_no || null,
+                room_no || null,
+                title.trim(),
+                description?.trim() || '',
+                photoUrl
+            ]
+        );
+
+        let row = await getComplaintRow(result.insertId);
+        try {
+            const [employees] = await masterPool.query(
+                `SELECT id, assigned_categories FROM users
+                 WHERE is_ticket_employee = 1 AND is_active = 1 AND role IN ('staff', 'manager')`
+            );
+            const assignedTo = employees.filter((employee) =>
+                parseJson(employee.assigned_categories).map(Number).includes(Number(category_id))
+            );
+            if (assignedTo.length) {
+                const assignments = assignedTo.map((employee) => ({
+                    id: Date.now() + Number(employee.id),
+                    assigned_to: Number(employee.id),
+                    assigned_by: null,
+                    notes: 'Auto-assigned based on category',
+                    is_active: true,
+                    assigned_at: new Date().toISOString()
+                }));
+                await saveComplaintJson(result.insertId, 'assignments', assignments);
+                await appendStatus(row, 'approaching', null, 'Auto-assigned based on category');
+                row = await getComplaintRow(result.insertId);
+            }
+        } catch (assignmentError) {
+            console.error('Complaint auto-assignment failed:', assignmentError);
+        }
+        res.status(201).json({ success: true, message: 'Complaint created successfully', data: (await enrichComplaints([row]))[0] });
+    } catch (error) {
+        console.error('Error creating complaint:', error);
+        res.status(500).json({ success: false, message: 'Error creating complaint', error: error.message });
+    }
+};
+
 exports.getTickets = async (req, res) => {
     try {
         const { status, category_id, assigned_to, student_id, requester_type, page = 1, limit = 50 } = req.query;
-        const offset = (parseInt(page) - 1) * parseInt(limit);
-
-        let query = `
-      SELECT 
-        t.id,
-        t.ticket_number,
-        t.student_id,
-        t.admission_number,
-        t.requester_type,
-        t.raised_by_rbac_id,
-        t.raised_by_hrms_id,
-        t.requester_display_name,
-        t.category_id,
-        t.sub_category_id,
-        t.college_id,
-        t.college_name,
-        t.block_no,
-        t.floor_no,
-        t.room_no,
-        t.title,
-        t.description,
-        (CASE WHEN t.photo_url IS NOT NULL AND t.photo_url != '' THEN 1 ELSE 0 END) as has_photo,
-        t.status,
-        t.priority,
-        t.created_at,
-        t.updated_at,
-        t.resolved_at,
-        t.closed_at,
-        c.name as category_name,
-        sc.name as sub_category_name,
-        s.student_name,
-        s.student_mobile,
-        ru_requester.name as staff_requester_name,
-        ru_hrms.name as hrms_linked_name,
-        COALESCE(s.student_name, ru_requester.name, ru_hrms.name, t.requester_display_name) as requester_name,
-        GROUP_CONCAT(DISTINCT CONCAT(ru.name, ' (', ru.username, ')') SEPARATOR ', ') as assigned_users,
-        (
-            SELECT JSON_ARRAYAGG(
-                JSON_OBJECT(
-                    'id', ta_sub.id,
-                    'assigned_to', ta_sub.assigned_to,
-                    'assigned_at', ta_sub.assigned_at,
-                    'assigned_to_name', ru_sub.name,
-                    'assigned_to_role', ru_sub.role
-                )
-            )
-            FROM ticket_assignments ta_sub
-            JOIN rbac_users ru_sub ON ta_sub.assigned_to = ru_sub.id
-            WHERE ta_sub.ticket_id = t.id AND ta_sub.is_active = TRUE
-        ) as assignments
-      FROM tickets t
-      LEFT JOIN complaint_categories c ON t.category_id = c.id
-      LEFT JOIN complaint_categories sc ON t.sub_category_id = sc.id
-      LEFT JOIN students s ON t.student_id = s.id
-      LEFT JOIN rbac_users ru_requester ON t.raised_by_rbac_id = ru_requester.id
-      ${HRMS_USER_JOIN}
-      LEFT JOIN ticket_assignments ta ON t.id = ta.ticket_id AND ta.is_active = TRUE
-      LEFT JOIN rbac_users ru ON ta.assigned_to = ru.id
-    `;
-
         const conditions = [];
         const params = [];
-
-        if (status) {
-            conditions.push('t.status = ?');
-            params.push(status);
-        }
-
-        if (category_id) {
-            conditions.push('t.category_id = ?');
-            params.push(category_id);
-        }
-
+        if (status) { conditions.push('c.status = ?'); params.push(status); }
+        if (category_id) { conditions.push('c.category_id = ?'); params.push(category_id); }
         if (student_id) {
-            conditions.push('t.student_id = ?');
-            params.push(student_id);
+            conditions.push('(c.requester_user_id = ? OR c.requester_identifier = ?)');
+            params.push(student_id, student_id);
         }
-
-        if (requester_type === 'student') {
-            conditions.push("(t.requester_type = 'student' OR t.requester_type IS NULL)");
-        } else if (requester_type === 'staff' || requester_type === 'faculty') {
-            conditions.push("t.requester_type = 'staff'");
-        }
-
+        if (requester_type === 'student') conditions.push("c.requester_type = 'student'");
+        if (requester_type === 'staff' || requester_type === 'faculty') conditions.push("c.requester_type = 'staff'");
         if (assigned_to) {
-            conditions.push('ta.assigned_to = ?');
-            params.push(assigned_to);
+            conditions.push(`EXISTS (
+                SELECT 1 FROM JSON_TABLE(c.assignments, '$[*]' COLUMNS (
+                    assigned_user INT PATH '$.assigned_to',
+                    assignment_active BOOLEAN PATH '$.is_active'
+                )) a WHERE a.assigned_user = ? AND a.assignment_active = TRUE
+            )`);
+            params.push(Number(assigned_to));
         }
-
-        if (conditions.length > 0) {
-            query += ' WHERE ' + conditions.join(' AND ');
-        }
-
-        query += ' GROUP BY t.id ORDER BY t.created_at DESC LIMIT ? OFFSET ?';
-        params.push(parseInt(limit), offset);
-
-        const [tickets] = await masterPool.query(query, params);
-        const enrichedTickets = await enrichTicketsRequesterNames(tickets);
-
-        // Get total count
-        let countQuery = 'SELECT COUNT(DISTINCT t.id) as total FROM tickets t';
-        if (assigned_to) {
-            countQuery += ' LEFT JOIN ticket_assignments ta ON t.id = ta.ticket_id AND ta.is_active = TRUE';
-        }
-        if (conditions.length > 0) {
-            countQuery += ' WHERE ' + conditions.join(' AND ');
-        }
-
-        const [countResult] = await masterPool.query(countQuery, params.slice(0, -2));
-        const total = countResult && countResult[0] ? countResult[0].total : 0;
-
+        const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+        const pageNumber = Math.max(1, Number.parseInt(page, 10) || 1);
+        const pageSize = Math.min(200, Math.max(1, Number.parseInt(limit, 10) || 50));
+        const offset = (pageNumber - 1) * pageSize;
+        const [rows] = await masterPool.query(
+            `SELECT c.*, cat.name AS category_name, sub.name AS sub_category_name
+             FROM complaints c
+             LEFT JOIN categories cat ON c.category_id = cat.id
+             LEFT JOIN categories sub ON c.sub_category_id = sub.id
+             ${where}
+             ORDER BY c.created_at DESC LIMIT ? OFFSET ?`,
+            [...params, pageSize, offset]
+        );
+        const [countRows] = await masterPool.query(`SELECT COUNT(*) AS total FROM complaints c ${where}`, params);
         res.json({
             success: true,
-            data: enrichedTickets,
-            pagination: {
-                page: parseInt(page),
-                limit: parseInt(limit),
-                total,
-                pages: Math.ceil(total / parseInt(limit))
-            }
+            data: await enrichComplaints(rows),
+            pagination: { page: pageNumber, limit: pageSize, total: countRows[0].total, pages: Math.ceil(countRows[0].total / pageSize) }
         });
     } catch (error) {
-        console.error('Error fetching tickets:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error fetching tickets',
-            error: error.message
-        });
+        console.error('Error fetching complaints:', error);
+        res.status(500).json({ success: false, message: 'Error fetching complaints', error: error.message });
     }
 };
 
-/**
- * Get single ticket with full details
- */
 exports.getTicket = async (req, res) => {
     try {
-        const { id } = req.params;
-        const user = req.user || req.admin;
-
-        const [tickets] = await masterPool.query(
-            `SELECT 
-        t.*,
-        c.name as category_name,
-        c.description as category_description,
-        sc.name as sub_category_name,
-        sc.description as sub_category_description,
-        s.student_name,
-        s.student_mobile,
-        ru_requester.name as staff_requester_name,
-        ru_hrms.name as hrms_linked_name,
-        COALESCE(s.student_name, ru_requester.name, ru_hrms.name, t.requester_display_name) as requester_name
-      FROM tickets t
-      LEFT JOIN complaint_categories c ON t.category_id = c.id
-      LEFT JOIN complaint_categories sc ON t.sub_category_id = sc.id
-      LEFT JOIN students s ON t.student_id = s.id
-      LEFT JOIN rbac_users ru_requester ON t.raised_by_rbac_id = ru_requester.id
-      ${HRMS_USER_JOIN}
-      WHERE t.id = ?`,
-            [id]
-        );
-
-        if (tickets.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: 'Ticket not found'
-            });
+        const row = await getComplaintRow(req.params.id);
+        if (!row) return res.status(404).json({ success: false, message: 'Complaint not found' });
+        const user = req.user || req.admin || req.student;
+        const isRequester = user?.role === 'student'
+            ? String(row.requester_identifier) === String(user.admission_number || user.admissionNumber)
+            : (user?.hrmsId && row.requester_hrms_id === user.hrmsId) ||
+              (user?.id && Number(row.requester_user_id) === Number(user.id));
+        if (user?.role === 'student' || user?.ticketAccess === 'request' || (user?.is_hrms_session && !user?.id)) {
+            if (!isRequester) return res.status(403).json({ success: false, message: 'Access denied. You can only view your own complaints.' });
         }
-
-        const [normalizedTicket] = await enrichTicketsRequesterNames([tickets[0]]);
-        const ticketRecord = normalizedTicket || normalizeRequesterFields(tickets[0]);
-
-        // Determine if this is a pure requester (student or HRMS-only faculty with no portal id)
-        // vs. an admin-side user (super_admin, any RBAC user with a proper id, worker, etc.)
-        // Admin-side users can view ALL tickets; requesters can only view their own.
-        const isStudentRequester = user.role === 'student' || !!(user.admission_number || user.admissionNumber);
-        const isHrmsOnlyRequester = !!(user.is_hrms_session || user.hrmsId) && !user.id;
-        const isAdminSideUser = !isStudentRequester && !isHrmsOnlyRequester;
-
-        if (isStudentRequester) {
-            // Students can only view their own tickets
-            const studentAdmissionNumber = user.admission_number || user.admissionNumber;
-            if (tickets[0].admission_number !== studentAdmissionNumber) {
-                return res.status(403).json({
-                    success: false,
-                    message: 'Access denied. You can only view your own tickets.'
-                });
-            }
-        } else if (isHrmsOnlyRequester) {
-            // HRMS-only faculty (raised ticket as requester, no portal login) can only view their own
-            const ownsByHrms = user.hrmsId && tickets[0].raised_by_hrms_id === user.hrmsId;
-            if (!ownsByHrms) {
-                return res.status(403).json({
-                    success: false,
-                    message: 'Access denied. You can only view your own tickets.'
-                });
-            }
+        const complaint = (await enrichComplaints([row]))[0];
+        if (user?.ticketAccess === 'request' || user?.role === 'student' || (user?.is_hrms_session && !user?.id)) {
+            complaint.comments = complaint.comments.filter((comment) => !comment.is_internal);
         }
-        // isAdminSideUser → no restriction: super admins, managers, workers, custom roles, sub-admins
-        // all have full access to view any ticket
-
-        // Get assignments
-        const [assignments] = await masterPool.query(
-            `SELECT 
-        ta.*,
-        ru.name as assigned_to_name,
-        ru.username as assigned_to_username,
-        ru.email as assigned_to_email,
-        ru.role as assigned_to_role,
-        assigned_by_ru.name as assigned_by_name
-      FROM ticket_assignments ta
-      LEFT JOIN rbac_users ru ON ta.assigned_to = ru.id
-      LEFT JOIN rbac_users assigned_by_ru ON ta.assigned_by = assigned_by_ru.id
-      WHERE ta.ticket_id = ? AND ta.is_active = TRUE
-      ORDER BY ta.assigned_at DESC`,
-            [id]
-        );
-
-        // Get status history
-        const [statusHistory] = await masterPool.query(
-            `SELECT 
-        tsh.*,
-        ru.name as changed_by_name,
-        ru.username as changed_by_username
-      FROM ticket_status_history tsh
-      LEFT JOIN rbac_users ru ON tsh.changed_by = ru.id
-      WHERE tsh.ticket_id = ?
-      ORDER BY tsh.created_at DESC`,
-            [id]
-        );
-
-        // Get comments
-        const [comments] = await masterPool.query(
-            `SELECT 
-        tc.*,
-        CASE 
-          WHEN tc.user_type = 'admin' THEN ru.name
-          ELSE s.student_name
-        END as user_name,
-        CASE 
-          WHEN tc.user_type = 'admin' THEN ru.username
-          ELSE s.admission_number
-        END as user_identifier
-      FROM ticket_comments tc
-      LEFT JOIN rbac_users ru ON tc.user_type = 'admin' AND tc.user_id = ru.id
-      LEFT JOIN students s ON tc.user_type = 'student' AND tc.user_id = s.id
-      WHERE tc.ticket_id = ?
-      ORDER BY tc.created_at ASC`,
-            [id]
-        );
-
-        // Get feedback if ticket is completed
-        let feedback = null;
-        if (tickets[0].status === 'completed') {
-            const [feedbackData] = await masterPool.query(
-                'SELECT * FROM ticket_feedback WHERE ticket_id = ?',
-                [id]
-            );
-            if (feedbackData.length > 0) {
-                feedback = feedbackData[0];
-            }
-        }
-
-        res.json({
-            success: true,
-            data: {
-                ...ticketRecord,
-                assignments,
-                status_history: statusHistory,
-                comments,
-                feedback
-            }
-        });
+        res.json({ success: true, data: complaint });
     } catch (error) {
-        console.error('Error fetching ticket:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error fetching ticket',
-            error: error.message
-        });
+        console.error('Error fetching complaint:', error);
+        res.status(500).json({ success: false, message: 'Error fetching complaint', error: error.message });
     }
 };
 
-/**
- * Get tickets for a student
- */
 exports.getStudentTickets = async (req, res) => {
     try {
         const user = req.user || req.student;
-
-        if (!user) {
-            return res.status(401).json({
-                success: false,
-                message: 'Authentication required'
-            });
-        }
-
-        const isStudent = user.role === 'student' || user.admission_number || user.admissionNumber;
-        const isHrmsSession = !!(user.is_hrms_session || user.hrmsId);
-        const admissionNumber = user.admission_number || user.admissionNumber;
-
-        let tickets;
-        if (isStudent) {
-            if (!admissionNumber) {
-                return res.status(401).json({
-                    success: false,
-                    message: 'Student authentication required'
-                });
-            }
-
-            [tickets] = await masterPool.query(
-                `SELECT
-        t.id,
-        t.ticket_number,
-        t.student_id,
-        t.admission_number,
-        t.requester_type,
-        t.category_id,
-        t.sub_category_id,
-        t.title,
-        t.description,
-        (CASE WHEN t.photo_url IS NOT NULL AND t.photo_url != '' THEN 1 ELSE 0 END) as has_photo,
-        t.status,
-        t.priority,
-        t.created_at,
-        t.updated_at,
-        t.resolved_at,
-        t.closed_at,
-        c.name as category_name,
-        sc.name as sub_category_name,
-        (
-            SELECT JSON_OBJECT(
-                'id', tf_sub.id,
-                'rating', tf_sub.rating,
-                'feedback_text', tf_sub.feedback_text
-            )
-            FROM ticket_feedback tf_sub
-            WHERE tf_sub.ticket_id = t.id
-            LIMIT 1
-        ) as feedback
-      FROM tickets t
-      LEFT JOIN complaint_categories c ON t.category_id = c.id
-      LEFT JOIN complaint_categories sc ON t.sub_category_id = sc.id
-      WHERE t.admission_number = ? AND (t.requester_type = 'student' OR t.requester_type IS NULL)
-      ORDER BY t.created_at DESC`,
-                [admissionNumber]
-            );
-        } else if (isHrmsSession) {
-            try {
-                [tickets] = await masterPool.query(
-                    `SELECT
-        t.id,
-        t.ticket_number,
-        t.student_id,
-        t.admission_number,
-        t.requester_type,
-        t.category_id,
-        t.sub_category_id,
-        t.title,
-        t.description,
-        (CASE WHEN t.photo_url IS NOT NULL AND t.photo_url != '' THEN 1 ELSE 0 END) as has_photo,
-        t.status,
-        t.priority,
-        t.created_at,
-        t.updated_at,
-        t.resolved_at,
-        t.closed_at,
-        c.name as category_name,
-        sc.name as sub_category_name,
-        (
-            SELECT JSON_OBJECT(
-                'id', tf_sub.id,
-                'rating', tf_sub.rating,
-                'feedback_text', tf_sub.feedback_text
-            )
-            FROM ticket_feedback tf_sub
-            WHERE tf_sub.ticket_id = t.id
-            LIMIT 1
-        ) as feedback
-      FROM tickets t
-      LEFT JOIN complaint_categories c ON t.category_id = c.id
-      LEFT JOIN complaint_categories sc ON t.sub_category_id = sc.id
-      WHERE (
-          (? IS NOT NULL AND t.raised_by_hrms_id = ?)
-          OR (? IS NOT NULL AND t.raised_by_rbac_id = ?)
-          OR (t.admission_number IS NOT NULL AND t.admission_number IN (?, ?, ?))
-      )
-      ORDER BY t.created_at DESC`,
-                    [
-                        user.hrmsId || null, user.hrmsId || null,
-                        user.id || null, user.id || null,
-                        user.username || '', user.email || '', user.hrmsId ? `HRMS-${user.hrmsId}` : ''
-                    ]
-                );
-            } catch (queryError) {
-                if (queryError.code === 'ER_BAD_FIELD_ERROR') {
-                    [tickets] = await masterPool.query(
-                        `SELECT t.*, c.name as category_name, sc.name as sub_category_name
-                         FROM tickets t
-                         LEFT JOIN complaint_categories c ON t.category_id = c.id
-                         LEFT JOIN complaint_categories sc ON t.sub_category_id = sc.id
-                         WHERE t.admission_number IN (?, ?, ?)
-                         ORDER BY t.created_at DESC`,
-                        [user.username || '', user.email || '', user.hrmsId ? `HRMS-${user.hrmsId}` : '']
-                    );
-                } else {
-                    throw queryError;
-                }
-            }
-        } else {
-            [tickets] = await masterPool.query(
-                `SELECT
-        t.*,
-        c.name as category_name,
-        sc.name as sub_category_name,
-        (
-            SELECT JSON_OBJECT(
-                'id', tf_sub.id,
-                'rating', tf_sub.rating,
-                'feedback_text', tf_sub.feedback_text
-            )
-            FROM ticket_feedback tf_sub
-            WHERE tf_sub.ticket_id = t.id
-            LIMIT 1
-        ) as feedback
-      FROM tickets t
-      LEFT JOIN complaint_categories c ON t.category_id = c.id
-      LEFT JOIN complaint_categories sc ON t.sub_category_id = sc.id
-      WHERE (
-          (? IS NOT NULL AND t.raised_by_rbac_id = ?)
-          OR (t.admission_number IS NOT NULL AND t.admission_number IN (?, ?, ?))
-      )
-      ORDER BY t.created_at DESC`,
-                [
-                    user.id || null, user.id || null,
-                    user.username || '', user.email || '', user.id ? `STAFF-${user.id}` : ''
-                ]
-            );
-        }
-
-        res.json({
-            success: true,
-            data: tickets
-        });
-    } catch (error) {
-        console.error('Error fetching student tickets:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error fetching tickets',
-            error: error.message
-        });
-    }
-};
-
-/**
- * Resolve a list of incoming assignee ids to rbac_users ids.
- * Ids may be rbac_users ids directly, or ticket_employees ids sent by
- * older clients for standalone workers — those are mapped through
- * ticket_employees.rbac_user_id.
- * Returns { resolved: number[], missing: number[] }.
- */
-const resolveAssigneeIds = async (ids) => {
-    const uniqueIds = [...new Set(ids.map(Number))];
-    const placeholders = uniqueIds.map(() => '?').join(',');
-
-    const [rbacRows] = await masterPool.query(
-        `SELECT id FROM rbac_users WHERE id IN (${placeholders})`,
-        uniqueIds
-    );
-    const rbacIds = new Set(rbacRows.map(r => r.id));
-
-    const resolved = new Set();
-    const unresolvedIds = [];
-    for (const id of uniqueIds) {
-        if (rbacIds.has(id)) {
-            resolved.add(id);
-        } else {
-            unresolvedIds.push(id);
-        }
-    }
-
-    const missing = [];
-    if (unresolvedIds.length > 0) {
-        const empPlaceholders = unresolvedIds.map(() => '?').join(',');
-        const [empRows] = await masterPool.query(
-            `SELECT id, rbac_user_id FROM ticket_employees WHERE id IN (${empPlaceholders}) AND is_active = 1`,
-            unresolvedIds
+        if (!user) return res.status(401).json({ success: false, message: 'Authentication required' });
+        const predicate = requesterPredicate(user);
+        const [rows] = await masterPool.query(
+            `SELECT c.*, cat.name AS category_name, sub.name AS sub_category_name
+             FROM complaints c
+             LEFT JOIN categories cat ON c.category_id = cat.id
+             LEFT JOIN categories sub ON c.sub_category_id = sub.id
+             WHERE c.${predicate.column} = ?
+             ORDER BY c.created_at DESC`,
+            [predicate.value]
         );
-        const empMap = new Map(empRows.map(r => [r.id, r.rbac_user_id]));
-
-        for (const id of unresolvedIds) {
-            const mapped = empMap.get(id);
-            if (mapped) {
-                resolved.add(mapped);
-            } else {
-                missing.push(id);
-            }
-        }
+        res.json({ success: true, data: await enrichComplaints(rows) });
+    } catch (error) {
+        console.error('Error fetching requester complaints:', error);
+        res.status(500).json({ success: false, message: 'Error fetching complaints', error: error.message });
     }
-
-    return { resolved: [...resolved], missing };
 };
 
-/**
- * Assign ticket to user(s). An empty assigned_to array unassigns everyone.
- */
 exports.assignTicket = async (req, res) => {
     try {
-        const { id } = req.params;
-        const { assigned_to, notes } = req.body;
-        const user = req.user || req.admin;
-
-        if (!Array.isArray(assigned_to)) {
-            return res.status(400).json({
-                success: false,
-                message: 'assigned_to must be an array of user ids'
-            });
+        const row = await getComplaintRow(req.params.id);
+        if (!row) return res.status(404).json({ success: false, message: 'Complaint not found' });
+        const assignedTo = req.body.assigned_to;
+        if (!Array.isArray(assignedTo)) return res.status(400).json({ success: false, message: 'assigned_to must be an array of user ids' });
+        const ids = [...new Set(assignedTo.map(Number).filter(Number.isInteger))];
+        let users = [];
+        if (ids.length) {
+            const [rows] = await masterPool.query('SELECT id FROM users WHERE id IN (?) AND is_active = 1', [ids]);
+            users = rows.map((user) => Number(user.id));
+            const missing = ids.filter((id) => !users.includes(id));
+            if (missing.length) return res.status(400).json({ success: false, message: `Assigned user(s) not found: ${missing.join(', ')}` });
         }
-
-        // Verify ticket exists
-        const [tickets] = await masterPool.query('SELECT id, status FROM tickets WHERE id = ?', [id]);
-        if (tickets.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: 'Ticket not found'
-            });
-        }
-
-        // Unassign everyone when the list is empty
-        if (assigned_to.length === 0) {
-            await masterPool.query(
-                'UPDATE ticket_assignments SET is_active = FALSE WHERE ticket_id = ?',
-                [id]
-            );
-
-            if (tickets[0].status === 'approaching') {
-                await updateTicketStatus(id, 'pending', user.id, 'All assignees removed');
-            }
-
-            return res.json({
-                success: true,
-                message: 'All assignees removed',
-                data: { assignment_ids: [] }
-            });
-        }
-
-        const { resolved, missing } = await resolveAssigneeIds(assigned_to);
-
-        if (missing.length > 0) {
-            return res.status(400).json({
-                success: false,
-                message: `Assigned user(s) not found: ${missing.join(', ')}`
-            });
-        }
-
-        // Deactivate existing assignments
-        await masterPool.query(
-            'UPDATE ticket_assignments SET is_active = FALSE WHERE ticket_id = ?',
-            [id]
-        );
-
-        // Create new assignments
-        const assignments = [];
-        for (const userId of resolved) {
-            const [result] = await masterPool.query(
-                `INSERT INTO ticket_assignments (ticket_id, assigned_to, assigned_by, notes)
-         VALUES (?, ?, ?, ?)`,
-                [id, userId, user.id, notes || null]
-            );
-            assignments.push(result.insertId);
-        }
-
-        // Update ticket status to 'approaching' if it was 'pending'
-        if (tickets[0].status === 'pending') {
-            await updateTicketStatus(id, 'approaching', user.id, 'Ticket assigned to staff');
-        }
-
-        res.json({
-            success: true,
-            message: 'Ticket assigned successfully',
-            data: { assignment_ids: assignments }
-        });
+        const assignments = users.map((id) => ({
+            id: Date.now() + id,
+            assigned_to: id,
+            assigned_by: req.user?.id || null,
+            notes: req.body.notes || null,
+            is_active: true,
+            assigned_at: new Date().toISOString()
+        }));
+        await saveComplaintJson(row.id, 'assignments', assignments);
+        if (users.length && row.status === 'pending') await appendStatus(row, 'approaching', req.user?.id, 'Complaint assigned to staff');
+        res.json({ success: true, message: users.length ? 'Complaint assigned successfully' : 'All assignees removed', data: { assignment_ids: assignments.map((item) => item.id) } });
     } catch (error) {
-        console.error('Error assigning ticket:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error assigning ticket',
-            error: error.message
-        });
+        console.error('Error assigning complaint:', error);
+        res.status(500).json({ success: false, message: 'Error assigning complaint', error: error.message });
     }
 };
 
-/**
- * Remove a single assignee from a ticket (soft delete of the assignment row)
- */
 exports.removeAssignment = async (req, res) => {
     try {
-        const { id, assignmentId } = req.params;
-        const user = req.user || req.admin;
-
-        const [assignments] = await masterPool.query(
-            'SELECT id FROM ticket_assignments WHERE id = ? AND ticket_id = ? AND is_active = TRUE',
-            [assignmentId, id]
-        );
-
-        if (assignments.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: 'Assignment not found'
-            });
+        const row = await getComplaintRow(req.params.id);
+        if (!row) return res.status(404).json({ success: false, message: 'Complaint not found' });
+        const assignments = parseJson(row.assignments);
+        const assignment = assignments.find((item) => String(item.id) === String(req.params.assignmentId) && item.is_active !== false);
+        if (!assignment) return res.status(404).json({ success: false, message: 'Assignment not found' });
+        assignment.is_active = false;
+        await saveComplaintJson(row.id, 'assignments', assignments);
+        if (!assignments.some((item) => item.is_active !== false) && row.status === 'approaching') {
+            await appendStatus(row, 'pending', req.user?.id, 'All assignees removed');
         }
-
-        await masterPool.query(
-            'UPDATE ticket_assignments SET is_active = FALSE WHERE id = ?',
-            [assignmentId]
-        );
-
-        // If nobody is left on the ticket, move it back to pending
-        const [remaining] = await masterPool.query(
-            'SELECT COUNT(*) as count FROM ticket_assignments WHERE ticket_id = ? AND is_active = TRUE',
-            [id]
-        );
-
-        if (remaining[0].count === 0) {
-            const [tickets] = await masterPool.query('SELECT status FROM tickets WHERE id = ?', [id]);
-            if (tickets.length > 0 && tickets[0].status === 'approaching') {
-                await updateTicketStatus(id, 'pending', user.id, 'All assignees removed');
-            }
-        }
-
-        res.json({
-            success: true,
-            message: 'Assignee removed successfully'
-        });
+        res.json({ success: true, message: 'Assignee removed successfully' });
     } catch (error) {
-        console.error('Error removing assignment:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error removing assignment',
-            error: error.message
-        });
+        console.error('Error removing complaint assignment:', error);
+        res.status(500).json({ success: false, message: 'Error removing assignment', error: error.message });
     }
 };
 
-/**
- * Update ticket status
- */
-const updateTicketStatus = async (ticketId, newStatus, changedBy, notes = null) => {
-    const connection = await masterPool.getConnection();
-    try {
-        await connection.beginTransaction();
-
-        // Get current status
-        const [tickets] = await connection.query(
-            'SELECT status FROM tickets WHERE id = ?',
-            [ticketId]
-        );
-
-        if (tickets.length === 0) {
-            throw new Error('Ticket not found');
-        }
-
-        const oldStatus = tickets[0].status;
-
-        // Update ticket status
-        const updateFields = ['status = ?'];
-        const updateValues = [newStatus];
-
-        if (newStatus === 'completed') {
-            updateFields.push('resolved_at = NOW()');
-        } else if (newStatus === 'closed') {
-            updateFields.push('closed_at = NOW()');
-        }
-
-        updateValues.push(ticketId);
-
-        await connection.query(
-            `UPDATE tickets SET ${updateFields.join(', ')} WHERE id = ?`,
-            updateValues
-        );
-
-        // Record status history
-        await connection.query(
-            `INSERT INTO ticket_status_history (ticket_id, old_status, new_status, changed_by, notes)
-       VALUES (?, ?, ?, ?, ?)`,
-            [ticketId, oldStatus, newStatus, changedBy, notes]
-        );
-
-        await connection.commit();
-        return { success: true };
-    } catch (error) {
-        await connection.rollback();
-        throw error;
-    } finally {
-        connection.release();
-    }
-};
-
-/**
- * Update ticket status (API endpoint)
- */
 exports.changeTicketStatus = async (req, res) => {
     try {
-        const { id } = req.params;
-        const { status, notes } = req.body;
-        const user = req.user || req.admin;
-
         const validStatuses = ['pending', 'approaching', 'resolving', 'completed', 'closed'];
-        if (!status || !validStatuses.includes(status)) {
-            return res.status(400).json({
-                success: false,
-                message: `Status must be one of: ${validStatuses.join(', ')}`
-            });
-        }
-
-        // We pass user.id even if it's a student to satisfy the NOT NULL constraint on changed_by.
-        // Although this might conceptually conflict with RBAC user IDs in history joins, 
-        // the notes field will clarify that this was a student action.
-        const isStudent = !!(user.role === 'student' || user.admission_number);
-        const changedBy = user.id;
-        const statusNotes = notes || (isStudent ? 'Status updated by student' : null);
-        let finalStatus = status;
-        let finalNotes = statusNotes;
-
-        // Reopen Logic: If student reopens (pending), try to auto-assign based on configuration
-        if (status === 'pending' && isStudent) {
-            try {
-                // Get ticket category
-                const [ticketInfo] = await masterPool.query('SELECT category_id FROM tickets WHERE id = ?', [id]);
-
-                if (ticketInfo.length > 0) {
-                    const category_id = ticketInfo[0].category_id;
-
-                    // Find managers (staff) for this category
-                    const [managers] = await masterPool.query(`
-                        SELECT rbac_user_id, assigned_categories 
-                        FROM ticket_employees 
-                        WHERE role = 'staff' AND is_active = 1
-                    `);
-
-                    const assignedManagerIds = [];
-
-                    for (const manager of managers) {
-                        let categories = [];
-                        try {
-                            categories = typeof manager.assigned_categories === 'string'
-                                ? JSON.parse(manager.assigned_categories)
-                                : manager.assigned_categories;
-                        } catch (e) {
-                            continue;
-                        }
-
-                        if (Array.isArray(categories)) {
-                            const categoryIds = categories.map(c => Number(c));
-                            const targetCategoryId = Number(category_id);
-
-                            if (categoryIds.includes(targetCategoryId)) {
-                                assignedManagerIds.push(manager.rbac_user_id);
-                            }
-                        }
-                    }
-
-                    if (assignedManagerIds.length > 0) {
-                        // Deactivate old assignments first? Maybe good practice.
-                        await masterPool.query('UPDATE ticket_assignments SET is_active = FALSE WHERE ticket_id = ?', [id]);
-
-                        const assignmentValues = assignedManagerIds.map(userId => [
-                            id,
-                            userId,
-                            null, // assigned_by is null for system
-                            'Auto-assigned on Reopen (Not Satisfied)'
-                        ]);
-
-                        await masterPool.query(
-                            `INSERT INTO ticket_assignments (ticket_id, assigned_to, assigned_by, notes) VALUES ?`,
-                            [assignmentValues]
-                        );
-
-                        finalStatus = 'approaching';
-                        finalNotes += ' (Auto-assigned to manager)';
-                    }
-                }
-            } catch (assignError) {
-                console.error('Reopen auto-assignment failed:', assignError);
+        const { status, notes } = req.body;
+        if (!validStatuses.includes(status)) return res.status(400).json({ success: false, message: `Status must be one of: ${validStatuses.join(', ')}` });
+        const row = await getComplaintRow(req.params.id);
+        if (!row) return res.status(404).json({ success: false, message: 'Complaint not found' });
+        const user = req.user || req.admin || req.student;
+        if (user?.ticketAccess === 'request' || user?.role === 'student' || (user?.is_hrms_session && !user?.id)) {
+            const predicate = requesterPredicate(user);
+            const ownsComplaint = predicate.value != null &&
+                String(row[predicate.column]) === String(predicate.value);
+            if (!ownsComplaint || status !== 'closed') {
+                return res.status(403).json({ success: false, message: 'Requesters may only close their own complaints' });
             }
         }
-
-        await updateTicketStatus(id, finalStatus, changedBy, finalNotes);
-
-        res.json({
-            success: true,
-            message: 'Ticket status updated successfully'
-        });
+        await appendStatus(row, status, req.user?.id, notes);
+        res.json({ success: true, message: 'Complaint status updated successfully' });
     } catch (error) {
-        console.error('Error updating ticket status:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error updating ticket status',
-            error: error.message
-        });
+        console.error('Error updating complaint status:', error);
+        res.status(500).json({ success: false, message: 'Error updating complaint status', error: error.message });
     }
 };
 
-/**
- * Add comment to ticket
- */
 exports.addComment = async (req, res) => {
     try {
-        const { id } = req.params;
-        const { comment_text, is_internal } = req.body;
+        const text = String(req.body.comment_text || '').trim();
+        if (!text) return res.status(400).json({ success: false, message: 'Comment text is required' });
+        const row = await getComplaintRow(req.params.id);
+        if (!row) return res.status(404).json({ success: false, message: 'Complaint not found' });
         const user = req.user || req.admin || req.student;
-
-        if (!comment_text || comment_text.trim() === '') {
-            return res.status(400).json({
-                success: false,
-                message: 'Comment text is required'
-            });
-        }
-
-        // Verify ticket exists
-        const [tickets] = await masterPool.query('SELECT id FROM tickets WHERE id = ?', [id]);
-        if (tickets.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: 'Ticket not found'
-            });
-        }
-
-        // Determine user type and ID
-        let userId, userType;
-        if (user.role === 'student' || user.admission_number) {
-            const [studentData] = await masterPool.query(
-                'SELECT id FROM students WHERE admission_number = ?',
-                [user.admission_number]
-            );
-            if (studentData.length === 0) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'Student not found'
-                });
+        if (user?.ticketAccess === 'request' || user?.role === 'student' || user?.is_hrms_session) {
+            const predicate = requesterPredicate(user);
+            if (predicate.value == null || String(row[predicate.column]) !== String(predicate.value)) {
+                return res.status(403).json({ success: false, message: 'You may only comment on your own complaints' });
             }
-            userId = studentData[0].id;
-            userType = 'student';
-        } else {
-            userId = user.id;
-            userType = 'admin';
         }
-
-        const [result] = await masterPool.query(
-            `INSERT INTO ticket_comments (ticket_id, user_id, user_type, comment_text, is_internal)
-       VALUES (?, ?, ?, ?, ?)`,
-            [id, userId, userType, comment_text.trim(), is_internal || false]
-        );
-
-        const [comment] = await masterPool.query(
-            'SELECT * FROM ticket_comments WHERE id = ?',
-            [result.insertId]
-        );
-
-        res.status(201).json({
-            success: true,
-            message: 'Comment added successfully',
-            data: comment[0]
-        });
+        const comments = parseJson(row.comments);
+        const comment = {
+            id: Date.now(),
+            ticket_id: row.id,
+            user_id: user?.id || null,
+            user_type: user?.role === 'student' ? 'student' : 'admin',
+            comment_text: text,
+            is_internal: user?.ticketAccess !== 'request' &&
+                user?.role !== 'student' && !(user?.is_hrms_session && !user?.id) && Boolean(req.body.is_internal),
+            user_name: user?.name || user?.username || null,
+            user_identifier: user?.admission_number || user?.username || null,
+            created_at: new Date().toISOString()
+        };
+        comments.push(comment);
+        await saveComplaintJson(row.id, 'comments', comments);
+        res.status(201).json({ success: true, message: 'Comment added successfully', data: comment });
     } catch (error) {
-        console.error('Error adding comment:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error adding comment',
-            error: error.message
-        });
+        console.error('Error adding complaint comment:', error);
+        res.status(500).json({ success: false, message: 'Error adding comment', error: error.message });
     }
 };
 
-/**
- * Submit feedback for completed ticket
- */
 exports.submitFeedback = async (req, res) => {
     try {
-        const { id } = req.params;
-        const { rating, feedback_text } = req.body;
-        const student = req.user || req.student;
-
-        if (!student || !student.admission_number) {
-            return res.status(401).json({
-                success: false,
-                message: 'Student authentication required'
-            });
-        }
-
-        if (!rating || rating < 1 || rating > 5) {
-            return res.status(400).json({
-                success: false,
-                message: 'Rating must be between 1 and 5'
-            });
-        }
-
-        // Verify ticket exists and belongs to student
-        const [tickets] = await masterPool.query(
-            'SELECT id, status, student_id FROM tickets WHERE id = ? AND admission_number = ?',
-            [id, student.admission_number]
-        );
-
-        if (tickets.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: 'Ticket not found or access denied'
-            });
-        }
-
-        if (tickets[0].status !== 'completed') {
-            return res.status(400).json({
-                success: false,
-                message: 'Feedback can only be submitted for completed tickets'
-            });
-        }
-
-        // Check if feedback already exists
-        const [existing] = await masterPool.query(
-            'SELECT id FROM ticket_feedback WHERE ticket_id = ?',
-            [id]
-        );
-
-        if (existing.length > 0) {
-            return res.status(400).json({
-                success: false,
-                message: 'Feedback already submitted for this ticket'
-            });
-        }
-
-        const [result] = await masterPool.query(
-            `INSERT INTO ticket_feedback (ticket_id, student_id, rating, feedback_text)
-       VALUES (?, ?, ?, ?)`,
-            [id, tickets[0].student_id, rating, feedback_text || null]
-        );
-
-        const [feedback] = await masterPool.query(
-            'SELECT * FROM ticket_feedback WHERE id = ?',
-            [result.insertId]
-        );
-
-        // Auto-close ticket after feedback
-        await masterPool.query(
-            "UPDATE tickets SET status = 'closed' WHERE id = ?",
-            [id]
-        );
-
-        // Record status change in history
-        await masterPool.query(
-            `INSERT INTO ticket_status_history (ticket_id, old_status, new_status, changed_by, notes)
-             VALUES (?, 'completed', 'closed', ?, 'Ticket closed automatically after student feedback')`,
-            [id, student.id] // Using student ID as they triggered the feedback
-        );
-
-        res.status(201).json({
-            success: true,
-            message: 'Feedback submitted successfully',
-            data: feedback[0]
+        const rating = Number(req.body.rating);
+        const user = req.user || req.student;
+        if (!user?.admission_number && !user?.admissionNumber) return res.status(401).json({ success: false, message: 'Student authentication required' });
+        if (!Number.isInteger(rating) || rating < 1 || rating > 5) return res.status(400).json({ success: false, message: 'Rating must be between 1 and 5' });
+        const row = await getComplaintRow(req.params.id);
+        const admissionNumber = user.admission_number || user.admissionNumber;
+        if (!row || row.requester_identifier !== admissionNumber) return res.status(404).json({ success: false, message: 'Complaint not found or access denied' });
+        if (row.status !== 'completed') return res.status(400).json({ success: false, message: 'Feedback can only be submitted for completed complaints' });
+        if (parseJson(row.feedback, null)) return res.status(400).json({ success: false, message: 'Feedback already submitted for this complaint' });
+        await saveComplaintJson(row.id, 'feedback', {
+            student_id: row.requester_user_id,
+            rating,
+            feedback_text: req.body.feedback_text || null,
+            created_at: new Date().toISOString()
         });
+        const freshRow = { ...row, feedback: JSON.stringify({ rating }) };
+        await appendStatus(freshRow, 'closed', user.id, 'Complaint closed automatically after student feedback');
+        res.status(201).json({ success: true, message: 'Feedback submitted successfully' });
     } catch (error) {
-        console.error('Error submitting feedback:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error submitting feedback',
-            error: error.message
-        });
+        console.error('Error submitting complaint feedback:', error);
+        res.status(500).json({ success: false, message: 'Error submitting feedback', error: error.message });
     }
 };
 
-/**
- * Get ticket statistics
- */
-exports.getTicketStats = async (req, res) => {
+exports.getTicketStats = async (_req, res) => {
     try {
-        const [stats] = await masterPool.query(
-            `SELECT 
-        status,
-        COUNT(*) as count
-      FROM tickets
-      GROUP BY status`
+        const [statusRows] = await masterPool.query(
+            'SELECT status, COUNT(*) AS count FROM complaints GROUP BY status'
         );
-
-        const [categoryStats] = await masterPool.query(
-            `SELECT 
-        c.name as category_name,
-        COUNT(t.id) as count
-      FROM complaint_categories c
-      LEFT JOIN tickets t ON c.id = t.category_id
-      WHERE c.parent_id IS NULL
-      GROUP BY c.id, c.name
-      ORDER BY count DESC
-      LIMIT 10`
+        const [categoryRows] = await masterPool.query(
+            `SELECT cat.id AS category_id, cat.name AS category_name, COUNT(c.id) AS count
+             FROM categories cat LEFT JOIN complaints c ON c.category_id = cat.id
+             GROUP BY cat.id, cat.name ORDER BY count DESC`
         );
-
-        res.json({
-            success: true,
-            data: {
-                by_status: stats,
-                by_category: categoryStats
-            }
-        });
+        const byStatus = statusRows.map((row) => ({ status: row.status, count: Number(row.count) }));
+        const total = byStatus.reduce((sum, row) => sum + row.count, 0);
+        res.json({ success: true, data: { total, by_status: byStatus, by_category: categoryRows } });
     } catch (error) {
-        console.error('Error fetching ticket stats:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error fetching ticket stats',
-            error: error.message
-        });
+        console.error('Error fetching complaint stats:', error);
+        res.status(500).json({ success: false, message: 'Error fetching complaint statistics', error: error.message });
     }
 };

@@ -1,5 +1,6 @@
 const { USER_ROLES, canCreateRole, hasPermission, validateRoleRequirements } = require('../constants/rbac');
 const { masterPool } = require('../config/database');
+const { mergePermissions } = require('../utils/permissions');
 
 /**
  * Check if user is a super admin (including legacy 'admin' role)
@@ -72,52 +73,24 @@ const verifyPermission = (module, operation = 'read') => {
             return next();
         }
 
-        let userPerms = user.permissions || {};
-
-        // Fetch permissions from database if not present in token or if we want to ensure they are up-to-date
+        let userPerms = {};
         if (user.id) {
             try {
-                // 1. Fetch from rbac_users
-                const [rbacRows] = await masterPool.query('SELECT permissions FROM rbac_users WHERE id = ?', [user.id]);
-                if (rbacRows.length > 0 && rbacRows[0].permissions) {
-                    const rawPerms = rbacRows[0].permissions;
-                    const parsedPerms = typeof rawPerms === 'string' ? JSON.parse(rawPerms) : rawPerms;
-                    userPerms = { ...userPerms, ...parsedPerms };
-                }
-
-                // 2. Fetch from ticket_employees -> ticket_roles
-                const [empRows] = await masterPool.query(`
-                    SELECT tr.permissions, te.role as employee_role 
-                    FROM ticket_employees te
-                    LEFT JOIN ticket_roles tr ON te.custom_role_id = tr.id AND tr.is_active = 1
-                    WHERE te.rbac_user_id = ? AND te.is_active = 1
+                const [rows] = await masterPool.query(`
+                    SELECT u.permissions AS user_permissions, r.permissions AS role_permissions
+                    FROM users u
+                    LEFT JOIN roles r ON u.role_id = r.id AND r.is_active = 1
+                    WHERE u.id = ? AND u.is_active = 1
                 `, [user.id]);
-
-                if (empRows.length > 0) {
-                    const emp = empRows[0];
-                    // If they are 'staff' or 'manager' and no custom role, we might give them default ticket access
-                    // But we rely on either their rbac_users permissions or custom role permissions.
-                    if (emp.permissions) {
-                        const rolePerms = typeof emp.permissions === 'string' ? JSON.parse(emp.permissions) : emp.permissions;
-                        // Merge permissions (OR logic)
-                        for (const mod in rolePerms) {
-                            if (!userPerms[mod]) userPerms[mod] = {};
-                            for (const op in rolePerms[mod]) {
-                                userPerms[mod][op] = userPerms[mod][op] || rolePerms[mod][op];
-                            }
-                        }
-                    }
-                    
-                    // Fallback: If they are assigned as 'staff' in ticket_employees but have no explicit ticket_management perms,
-                    // grant them basic ticket management access so they can assign/update tickets.
-                    if (module === 'ticket_management' || module === 'ticket_dashboard') {
-                        if (!userPerms[module]) userPerms[module] = {};
-                        userPerms[module]['read'] = true;
-                        userPerms[module]['write'] = true;
-                    }
+                if (rows.length > 0) {
+                    userPerms = mergePermissions(rows[0].role_permissions, rows[0].user_permissions);
                 }
             } catch (error) {
                 console.error('Error fetching user permissions in rbac middleware:', error);
+                return res.status(500).json({
+                    success: false,
+                    message: 'Unable to verify user permissions'
+                });
             }
         }
 

@@ -26,6 +26,26 @@ function verifySsoToken(ssoToken) {
  * Build a ticket-app user from an HRMS / portal SSO JWT payload (no password).
  */
 async function resolveUserFromSsoPayload(payload, masterPool) {
+    const admissionNumber = payload.admissionNumber || payload.admission_number || null;
+    if (payload.role === 'student' || admissionNumber) {
+        return {
+            type: 'student',
+            student: {
+                id: null,
+                name: payload.name || payload.student_name || 'Student',
+                username: payload.username || admissionNumber,
+                admission_number: admissionNumber,
+                phone: payload.phone || payload.phone_number || null,
+                student_photo: payload.student_photo || null,
+                course: payload.course || null,
+                branch: payload.branch || null,
+                college: payload.college || null,
+                current_year: payload.current_year || null,
+                current_semester: payload.current_semester || null
+            }
+        };
+    }
+
     const hrmsId = payload.hrmsId || payload.hrms_id || null;
     const rbacId = payload.id || payload.userId || payload.rbacUserId || null;
     const username = payload.username || payload.emp_no || null;
@@ -33,9 +53,9 @@ async function resolveUserFromSsoPayload(payload, masterPool) {
 
     if (rbacId) {
         const [rows] = await masterPool.query(
-            `SELECT id, name, username, email, phone, role, permissions, college_id, course_id, branch_id,
-                    is_active, hrms_id
-             FROM rbac_users WHERE id = ? LIMIT 1`,
+            `SELECT id, name, username, email, phone, role, permissions, college_id,
+                    is_active, hrms_id, user_type
+             FROM users WHERE id = ? AND user_type IN ('staff', 'admin') LIMIT 1`,
             [rbacId]
         );
         if (rows.length > 0) {
@@ -44,48 +64,20 @@ async function resolveUserFromSsoPayload(payload, masterPool) {
     }
 
     if (hrmsId) {
-        const existing = await findLocalRbacUser(masterPool, { hrmsIdStr: hrmsId, email, username });
+        const existing = await findLocalRbacUser(masterPool, { hrmsIdStr: hrmsId, email, username, empNo: username });
         if (existing) {
             return { type: 'rbac', user: existing };
         }
     }
 
     if (email || username) {
-        const existing = await findLocalRbacUser(masterPool, { hrmsIdStr: hrmsId, email, username });
+        const existing = await findLocalRbacUser(masterPool, { hrmsIdStr: hrmsId, email, username, empNo: username });
         if (existing) {
             return { type: 'rbac', user: existing };
         }
     }
 
-    if (hrmsId) {
-        return {
-            type: 'hrms',
-            profile: buildHrmsSessionProfile({
-                hrmsIdStr: hrmsId,
-                mappedName: payload.name || payload.employee_name || username || 'HRMS User',
-                mappedEmail: email || username || hrmsId,
-                mappedPhone: payload.phone || payload.phone_number || null,
-                mappedUsername: username || email?.split('@')?.[0] || `hrms_${hrmsId.slice(-8)}`,
-                mappedRole: payload.role || 'faculty'
-            })
-        };
-    }
-
-    if (payload.role === 'student' || payload.admissionNumber || payload.admission_number) {
-        const admissionNumber = payload.admissionNumber || payload.admission_number;
-        const [students] = await masterPool.query(
-            `SELECT s.id, s.student_name, s.admission_number, s.student_photo, s.course, s.branch, s.college,
-                    s.current_year, s.current_semester, sc.username
-             FROM students s
-             LEFT JOIN student_credentials sc ON sc.student_id = s.id
-             WHERE s.id = ? OR s.admission_number = ? LIMIT 1`,
-            [rbacId || payload.id, admissionNumber]
-        );
-        if (students.length > 0) {
-            return { type: 'student', student: students[0] };
-        }
-    }
-
+    // Do not allow login for HRMS users not yet registered on this site
     return null;
 }
 

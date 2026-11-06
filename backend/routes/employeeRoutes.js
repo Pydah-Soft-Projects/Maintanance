@@ -9,6 +9,9 @@ router.use(authMiddleware);
 // Get all employees
 router.get('/', employeeController.getEmployees);
 
+// Get HRMS directory for searching and creating users (live search, not stored)
+router.get('/hrms-directory', employeeController.getHrmsEmployees);
+
 // Get available users (not yet assigned as employees)
 router.get('/available-users', employeeController.getAvailableUsers);
 

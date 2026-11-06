@@ -8,8 +8,8 @@ import {
     Search,
     Phone,
     Mail,
-    Filter,
-    TrendingUp
+    TrendingUp,
+    AtSign
 } from 'lucide-react';
 import api from '../../config/api';
 import toast from 'react-hot-toast';
@@ -18,7 +18,6 @@ import EmployeeHistoryModal from '../../components/admin/EmployeeHistoryModal';
 import '../../styles/admin-pages.css';
 
 const EmployeeManagement = () => {
-    const [activeRole, setActiveRole] = useState('all'); // all, staff, worker
     const [searchTerm, setSearchTerm] = useState('');
     const [showModal, setShowModal] = useState(false);
     const [editingUser, setEditingUser] = useState(null);
@@ -26,20 +25,11 @@ const EmployeeManagement = () => {
 
     const queryClient = useQueryClient();
 
-    // Fetch employees (from ticket_employees table)
+    // Fetch users (from maintenance_db.users)
     const { data: employeesData, isLoading } = useQuery({
         queryKey: ['ticket-employees'],
         queryFn: async () => {
             const response = await api.get('/employees');
-            return response.data?.data || [];
-        }
-    });
-
-    // Fetch available RBAC users (not yet assigned as employees)
-    const { data: availableUsersData } = useQuery({
-        queryKey: ['available-rbac-users'],
-        queryFn: async () => {
-            const response = await api.get('/employees/available-users');
             return response.data?.data || [];
         }
     });
@@ -56,10 +46,10 @@ const EmployeeManagement = () => {
     // Mutations
     const mutationConfig = {
         onSuccess: () => {
-            toast.success(editingUser ? 'Employee updated' : 'Employee assigned');
+            toast.success(editingUser ? 'User updated successfully' : 'User registered from HRMS successfully');
             closeModal();
             queryClient.invalidateQueries(['ticket-employees']);
-            queryClient.invalidateQueries(['available-rbac-users']);
+            queryClient.invalidateQueries(['rbac-users']);
         },
         onError: (err) => toast.error(err.response?.data?.message || 'Operation failed')
     };
@@ -77,61 +67,30 @@ const EmployeeManagement = () => {
     const deleteMutation = useMutation({
         mutationFn: (id) => api.delete(`/employees/${id}`),
         onSuccess: () => {
-            toast.success('Employee removed');
+            toast.success('User removed from ticket system');
             queryClient.invalidateQueries(['ticket-employees']);
-            queryClient.invalidateQueries(['available-rbac-users']);
         },
-        onError: (err) => toast.error('Failed to delete employee')
+        onError: (err) => toast.error('Failed to remove user')
     });
 
-    // Mutation for creating new RBAC user
-    const createRbacUserMutation = useMutation({
-        mutationFn: (data) => api.post('/rbac/users', data),
-        onSuccess: async (response, variables) => {
-            const newUserId = response.data?.data?.id;
-            if (newUserId) {
-                // After creating RBAC user, assign them as employee
-                createMutation.mutate({
-                    rbac_user_id: newUserId,
-                    role: variables.role,
-                    custom_role_id: variables.custom_role_id,
-                    assigned_categories: variables.assigned_categories || [],
-                    assigned_subcategories: variables.assigned_subcategories || []
-                });
-            } else {
-                toast.success('User created successfully');
-                closeModal();
-                queryClient.invalidateQueries(['available-rbac-users']);
-            }
-        },
-        onError: (err) => toast.error(err.response?.data?.message || 'Failed to create user')
-    });
-
-    // Filtering
+    // Filtering across all users
     const employees = employeesData || [];
     const filteredEmployees = employees.filter(employee => {
-        let matchesRole = false;
-        if (activeRole === 'all') {
-            matchesRole = true;
-        } else if (activeRole === 'staff') {
-            // Include both staff and manager roles in the Managers tab
-            matchesRole = employee.role === 'staff' || employee.role === 'manager';
-        } else {
-            matchesRole = employee.role === activeRole;
-        }
-
         const name = employee.name?.toLowerCase() || '';
         const email = employee.email?.toLowerCase() || '';
+        const role = (employee.role_display_name || employee.role || '').toLowerCase();
+        const username = employee.username?.toLowerCase() || '';
+        const phone = employee.phone?.toLowerCase() || '';
         const search = searchTerm.toLowerCase();
-        const matchesSearch = name.includes(search) || email.includes(search);
-        return matchesRole && matchesSearch;
+        return name.includes(search) || email.includes(search) || role.includes(search) || username.includes(search) || phone.includes(search);
     });
 
     const handleModalSubmit = (type, payload) => {
-        if (type === 'assign') {
-            if (!payload.rbac_user_id) return toast.error('Please select a user');
+        if (type === 'create') {
             createMutation.mutate({
-                rbac_user_id: payload.rbac_user_id,
+                hrms_employee_id: payload.hrms_employee_id,
+                hrms_employee_no: payload.hrms_employee_no,
+                name: payload.name,
                 role: payload.role,
                 custom_role_id: payload.custom_role_id,
                 assigned_categories: payload.assigned_categories,
@@ -141,43 +100,12 @@ const EmployeeManagement = () => {
             updateMutation.mutate({
                 id: payload.id,
                 data: {
+                    name: payload.name,
                     role: payload.role,
                     custom_role_id: payload.custom_role_id,
                     assigned_categories: payload.assigned_categories,
                     assigned_subcategories: payload.assigned_subcategories
                 }
-            });
-        }
-    };
-
-    const handleCreateNewUser = (userData) => {
-        const isWorker = userData.role === 'worker';
-
-        // Validate required fields
-        // Phone is required for workers in backend
-        if (!userData.name || (!isWorker && !userData.email) || !userData.username || !userData.password) {
-            return toast.error('All fields are required');
-        }
-
-        if (isWorker && !userData.phone) {
-            return toast.error('Phone number is required for workers');
-        }
-
-        if (isWorker) {
-            // Workers are standalone, create directly in employee table
-            createMutation.mutate(userData);
-        } else {
-            // Managers need RBAC user first
-            createRbacUserMutation.mutate({
-                name: userData.name,
-                email: userData.email,
-                phone: userData.phone,
-                username: userData.username,
-                password: userData.password,
-                role: userData.role,
-                custom_role_id: userData.custom_role_id,
-                assigned_categories: userData.assigned_categories,
-                assigned_subcategories: userData.assigned_subcategories
             });
         }
     };
@@ -195,14 +123,6 @@ const EmployeeManagement = () => {
     if (isLoading) {
         return (
             <div className="admin-page-container animate-pulse">
-                <div className="mb-6">
-                    <div className="flex gap-4 border-b">
-                        <div className="h-10 bg-gray-200 rounded-t w-32"></div>
-                        <div className="h-10 bg-gray-200 rounded-t w-32"></div>
-                        <div className="h-10 bg-gray-200 rounded-t w-32"></div>
-                    </div>
-                </div>
-
                 <div className="mb-6">
                     <div className="h-10 bg-gray-200 rounded w-full max-w-md"></div>
                 </div>
@@ -238,66 +158,58 @@ const EmployeeManagement = () => {
     return (
         <div className="admin-page-container">
             <div className="card-base" style={{ padding: 0 }}>
-                {/* Tabs & Action */}
-                <div className="admin-tabs-container flex justify-between items-center pr-4 flex-wrap gap-2">
-                    <div className="admin-tabs-list">
-                        <button
-                            onClick={() => setActiveRole('all')}
-                            className={`admin-tab-btn ${activeRole === 'all' ? 'active-assigned' : ''}`}
-                        >
-                            All Employees
-                        </button>
-                        <button
-                            onClick={() => setActiveRole('staff')}
-                            className={`admin-tab-btn ${activeRole === 'staff' ? 'active-assigned' : ''}`}
-                        >
-                            Managers
-                        </button>
-                        <button
-                            onClick={() => setActiveRole('worker')}
-                            className={`admin-tab-btn ${activeRole === 'worker' ? 'active-resolved' : ''}`}
-                        >
-                            Workers
-                        </button>
+                {/* Users Header & Action Bar */}
+                <div className="admin-tabs-container flex justify-between items-center px-6 py-4 border-b border-gray-100 flex-wrap gap-3">
+                    <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                            <Users size={18} />
+                        </div>
+                        <div>
+                            <h2 className="text-base font-bold text-gray-900 leading-tight">All Users</h2>
+                            <p className="text-xs text-gray-500">{filteredEmployees.length} ticket {filteredEmployees.length === 1 ? 'user' : 'users'} provisioned from HRMS</p>
+                        </div>
                     </div>
-                    <button onClick={() => openModal()} className="btn-primary py-2 px-3 text-xs shrink-0">
+                    <button onClick={() => openModal()} className="btn-primary py-2 px-3 text-xs shrink-0 flex items-center gap-1.5" type="button">
                         <UserPlus size={16} />
-                        <span>{activeRole === 'worker' ? 'Add Worker' : activeRole === 'staff' ? 'Add Manager' : 'Add Employee'}</span>
+                        <span>Create User</span>
                     </button>
                 </div>
 
-                {/* Filters */}
+                {/* Search Filter */}
                 <div className="admin-filters-section">
                     <div className="input-group-wrapper" style={{ maxWidth: '100%' }}>
                         <Search className="input-icon" size={16} />
                         <input
                             className="input-with-icon"
-                            placeholder="Search employees by name or email..."
+                            placeholder="Search users by name, employee ID, email, or role..."
                             value={searchTerm}
                             onChange={e => setSearchTerm(e.target.value)}
                         />
                     </div>
                 </div>
 
-                {/* List */}
+                {/* User Cards Grid */}
                 <div className="card-body">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {filteredEmployees.length > 0 ? (
                             filteredEmployees.map(employee => (
                                 <div key={employee.id} className="admin-list-item relative overflow-hidden group hover:border-blue-200 transition-all">
-                                    <div className={`absolute top-0 left-0 w-1 h-full ${employee.role === 'staff' ? 'bg-blue-500' : 'bg-purple-500'}`} />
+                                    <div className={`absolute top-0 left-0 w-1 h-full ${employee.role === 'staff' || employee.role === 'manager' ? 'bg-blue-500' : employee.role === 'worker' ? 'bg-amber-500' : 'bg-purple-500'}`} />
                                     <div className="flex justify-between items-start mb-4">
                                         <div className="flex items-center gap-3">
-                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-lg ${employee.role === 'staff' ? 'bg-blue-500' : 'bg-purple-500'}`}>
-                                                {employee.name.charAt(0).toUpperCase()}
+                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-lg ${employee.role === 'staff' || employee.role === 'manager' ? 'bg-blue-500' : employee.role === 'worker' ? 'bg-amber-500' : 'bg-purple-500'}`}>
+                                                {(employee.name || 'U').charAt(0).toUpperCase()}
                                             </div>
                                             <div>
                                                 <h3 className="font-bold text-gray-900 line-clamp-1">{employee.name}</h3>
-                                                <p className="text-xs text-gray-500 uppercase font-semibold tracking-wider">{employee.role}</p>
+                                                <p className="text-xs text-gray-500 uppercase font-semibold tracking-wider">
+                                                    {employee.role_display_name || employee.role}
+                                                </p>
                                             </div>
                                         </div>
                                         <div className="flex gap-1">
                                             <button
+                                                type="button"
                                                 onClick={() => setViewingHistoryUser(employee)}
                                                 className="p-1.5 text-teal-600 hover:bg-teal-50 rounded transition-colors"
                                                 title="View Track"
@@ -305,6 +217,7 @@ const EmployeeManagement = () => {
                                                 <TrendingUp size={16} />
                                             </button>
                                             <button
+                                                type="button"
                                                 onClick={() => openModal(employee)}
                                                 className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
                                                 title="Edit"
@@ -312,21 +225,28 @@ const EmployeeManagement = () => {
                                                 <Edit size={16} />
                                             </button>
                                             <button
-                                                onClick={() => { if (window.confirm('Remove employee?')) deleteMutation.mutate(employee.id); }}
+                                                type="button"
+                                                onClick={() => { if (window.confirm(`Remove user "${employee.name}" from ticket system?`)) deleteMutation.mutate(employee.id); }}
                                                 className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors"
-                                                title="Delete"
+                                                title="Remove"
                                             >
                                                 <Trash2 size={16} />
                                             </button>
                                         </div>
                                     </div>
                                     <div className="space-y-2 text-sm text-gray-600">
+                                        {employee.username && (
+                                            <div className="flex items-center gap-2">
+                                                <AtSign size={14} className="text-gray-400 shrink-0" />
+                                                <span className="font-mono text-xs text-gray-700 font-medium">ID: {employee.username}</span>
+                                            </div>
+                                        )}
                                         <div className="flex items-center gap-2">
-                                            <Mail size={14} className="text-gray-400" />
-                                            <span className="truncate">{employee.email}</span>
+                                            <Mail size={14} className="text-gray-400 shrink-0" />
+                                            <span className="truncate">{employee.email || 'No email provided'}</span>
                                         </div>
                                         <div className="flex items-center gap-2">
-                                            <Phone size={14} className="text-gray-400" />
+                                            <Phone size={14} className="text-gray-400 shrink-0" />
                                             <span>{employee.phone || 'N/A'}</span>
                                         </div>
                                     </div>
@@ -338,9 +258,9 @@ const EmployeeManagement = () => {
                                     <div className="empty-state-icon">
                                         <Search size={32} />
                                     </div>
-                                    <p className="empty-state-text">No employees found matching your filters.</p>
-                                    <button onClick={() => { setActiveRole('all'); setSearchTerm(''); }} className="empty-state-action">
-                                        Clear filters
+                                    <p className="empty-state-text">No users found matching your search.</p>
+                                    <button onClick={() => setSearchTerm('')} className="empty-state-action" type="button">
+                                        Clear search
                                     </button>
                                 </div>
                             </div>
@@ -353,12 +273,9 @@ const EmployeeManagement = () => {
                 isOpen={showModal}
                 onClose={closeModal}
                 user={editingUser}
-                activeRole={activeRole}
-                existingUsers={availableUsersData}
                 availableRoles={rolesData || []}
                 onSubmit={handleModalSubmit}
-                onCreateNewUser={handleCreateNewUser}
-                isSubmitting={createMutation.isPending || updateMutation.isPending || createRbacUserMutation.isPending}
+                isSubmitting={createMutation.isPending || updateMutation.isPending}
             />
 
             <EmployeeHistoryModal

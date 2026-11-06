@@ -1,4 +1,39 @@
 const { masterPool } = require('../config/database');
+const { normalizeTicketPermissions } = require('../utils/permissions');
+
+const ROLE_PERMISSION_MODULES = {
+    ticket_dashboard: ['read'],
+    ticket_management: ['read', 'pending', 'assigned', 'resolved', 'student', 'faculty', 'write', 'update', 'delete'],
+    category_management: ['read', 'write', 'update', 'delete'],
+    employee_management: ['read', 'users', 'roles', 'write', 'update', 'delete']
+};
+
+const normalizeRolePermissions = (permissions) => {
+    const source = permissions && typeof permissions === 'object' ? permissions : {};
+    return normalizeTicketPermissions(Object.fromEntries(
+        Object.entries(ROLE_PERMISSION_MODULES).map(([module, actions]) => [
+            module,
+            Object.fromEntries(actions.map(action => [
+                action,
+                source[module]?.[action] === undefined
+                    ? (action !== 'roles' && source[module]?.read === true)
+                    : source[module][action] === true
+            ]))
+        ])
+    ));
+};
+
+const EXCLUDED_EXTERNAL_ROLES = [
+    'branch_hod',
+    'college_ao',
+    'college_principal',
+    'office_assistant',
+    'cashier',
+    'faculty',
+    'head_student_clubs',
+    'pydah_coe',
+    'student'
+];
 
 /**
  * Get all roles (system and custom)
@@ -21,27 +56,30 @@ exports.getRoles = async (req, res) => {
                 creator.name as created_by_name,
                 (
                     SELECT COUNT(*) 
-                    FROM ticket_employees 
-                    WHERE custom_role_id = r.id AND is_active = 1
+                    FROM users
+                    WHERE role_id = r.id AND is_ticket_employee = 1 AND is_active = 1
                 ) as employee_count
-            FROM ticket_roles r
-            LEFT JOIN rbac_users creator ON r.created_by = creator.id
+            FROM roles r
+            LEFT JOIN users creator ON r.created_by = creator.id
+            WHERE r.role_name NOT IN (?)
         `;
 
+        const params = [EXCLUDED_EXTERNAL_ROLES];
+
         if (!include_inactive || include_inactive === 'false') {
-            query += ' WHERE r.is_active = 1';
+            query += ' AND r.is_active = 1';
         }
 
         query += ' ORDER BY r.is_system_role DESC, r.created_at DESC';
 
-        const [roles] = await masterPool.query(query);
+        const [roles] = await masterPool.query(query, params);
 
         // Parse JSON permissions
         const rolesWithParsedPermissions = roles.map(role => ({
             ...role,
-            permissions: typeof role.permissions === 'string'
-                ? JSON.parse(role.permissions)
-                : role.permissions
+            permissions: normalizeRolePermissions(
+                typeof role.permissions === 'string' ? JSON.parse(role.permissions) : role.permissions
+            )
         }));
 
         res.json({
@@ -68,8 +106,8 @@ exports.getRole = async (req, res) => {
             `SELECT 
                 r.*,
                 creator.name as created_by_name
-             FROM ticket_roles r
-             LEFT JOIN rbac_users creator ON r.created_by = creator.id
+             FROM roles r
+             LEFT JOIN users creator ON r.created_by = creator.id
              WHERE r.id = ?`,
             [id]
         );
@@ -83,9 +121,9 @@ exports.getRole = async (req, res) => {
 
         const role = {
             ...roles[0],
-            permissions: typeof roles[0].permissions === 'string'
-                ? JSON.parse(roles[0].permissions)
-                : roles[0].permissions
+            permissions: normalizeRolePermissions(
+                typeof roles[0].permissions === 'string' ? JSON.parse(roles[0].permissions) : roles[0].permissions
+            )
         };
 
         res.json({
@@ -127,7 +165,7 @@ exports.createRole = async (req, res) => {
 
         // Check for duplicate role_name
         const [existing] = await masterPool.query(
-            'SELECT id FROM ticket_roles WHERE role_name = ?',
+            'SELECT id FROM roles WHERE role_name = ?',
             [role_name]
         );
 
@@ -138,41 +176,18 @@ exports.createRole = async (req, res) => {
             });
         }
 
-        // Validate permissions structure
-        const validModules = [
-            'ticket_dashboard',
-            'ticket_management',
-            'employee_management',
-            'category_management',
-            'ticket_reports',
-            'ticket_settings'
-        ];
-
-        const validActions = ['read', 'write', 'update', 'delete'];
-
-        // Ensure permissions object has correct structure
-        for (const module of validModules) {
-            if (!permissions[module]) {
-                permissions[module] = { read: false, write: false, update: false, delete: false };
-            } else {
-                for (const action of validActions) {
-                    if (permissions[module][action] === undefined) {
-                        permissions[module][action] = false;
-                    }
-                }
-            }
-        }
+        const normalizedPermissions = normalizeRolePermissions(permissions);
 
         // Insert role
         const [result] = await masterPool.query(
-            `INSERT INTO ticket_roles 
+            `INSERT INTO roles
             (role_name, display_name, description, permissions, is_system_role, created_by, created_at, updated_at)
             VALUES (?, ?, ?, ?, FALSE, ?, NOW(), NOW())`,
             [
                 role_name,
                 display_name,
                 description || null,
-                JSON.stringify(permissions),
+                JSON.stringify(normalizedPermissions),
                 currentUser.id
             ]
         );
@@ -184,7 +199,7 @@ exports.createRole = async (req, res) => {
                 id: result.insertId,
                 role_name,
                 display_name,
-                permissions
+                permissions: normalizedPermissions
             }
         });
     } catch (error) {
@@ -206,7 +221,7 @@ exports.updateRole = async (req, res) => {
 
         // Check if role exists
         const [existing] = await masterPool.query(
-            'SELECT is_system_role FROM ticket_roles WHERE id = ?',
+            'SELECT is_system_role FROM roles WHERE id = ?',
             [id]
         );
 
@@ -233,7 +248,7 @@ exports.updateRole = async (req, res) => {
 
             // Check for duplicate role_name (excluding current role)
             const [duplicate] = await masterPool.query(
-                'SELECT id FROM ticket_roles WHERE role_name = ? AND id != ?',
+                'SELECT id FROM roles WHERE role_name = ? AND id != ?',
                 [role_name, id]
             );
 
@@ -260,7 +275,7 @@ exports.updateRole = async (req, res) => {
 
         if (permissions !== undefined) {
             updates.push('permissions = ?');
-            values.push(JSON.stringify(permissions));
+            values.push(JSON.stringify(normalizeRolePermissions(permissions)));
         }
 
         if (is_active !== undefined) {
@@ -279,7 +294,7 @@ exports.updateRole = async (req, res) => {
         values.push(id);
 
         await masterPool.query(
-            `UPDATE ticket_roles SET ${updates.join(', ')} WHERE id = ?`,
+            `UPDATE roles SET ${updates.join(', ')} WHERE id = ?`,
             values
         );
 
@@ -297,15 +312,15 @@ exports.updateRole = async (req, res) => {
 };
 
 /**
- * Delete role (soft delete for custom roles, prevent deletion of system roles)
+ * Delete role (prevent deletion of super_admin role, allow deleting all other roles)
  */
 exports.deleteRole = async (req, res) => {
     try {
         const { id } = req.params;
 
-        // Check if role exists and is system role
+        // Check if role exists
         const [existing] = await masterPool.query(
-            'SELECT is_system_role, role_name FROM ticket_roles WHERE id = ?',
+            'SELECT is_system_role, role_name, display_name FROM roles WHERE id = ?',
             [id]
         );
 
@@ -316,29 +331,38 @@ exports.deleteRole = async (req, res) => {
             });
         }
 
-        // Allow deleting all roles (including system roles)
+        const role = existing[0];
+
+        // Superadmin cannot be deleted under any circumstances
+        if (role.role_name === 'super_admin') {
+            return res.status(403).json({
+                success: false,
+                message: 'The Super Administrator role is protected and cannot be deleted.'
+            });
+        }
+
         // Check if role is assigned to any active employees
         const [employees] = await masterPool.query(
-            'SELECT COUNT(*) as count FROM ticket_employees WHERE custom_role_id = ? AND is_active = 1',
+            'SELECT COUNT(*) as count FROM users WHERE role_id = ? AND is_ticket_employee = 1 AND is_active = 1',
             [id]
         );
 
         if (employees[0].count > 0) {
             return res.status(409).json({
                 success: false,
-                message: `Cannot delete role. ${employees[0].count} employee(s) are currently assigned to this role.`
+                message: `Cannot delete role "${role.display_name}". ${employees[0].count} active employee(s) are currently assigned to this role.`
             });
         }
 
         // Soft delete
         await masterPool.query(
-            'UPDATE ticket_roles SET is_active = 0, updated_at = NOW() WHERE id = ?',
+            'UPDATE roles SET is_active = 0, updated_at = NOW() WHERE id = ?',
             [id]
         );
 
         res.json({
             success: true,
-            message: 'Role deleted successfully'
+            message: `Role "${role.display_name}" deleted successfully`
         });
     } catch (error) {
         console.error('Delete Role Error:', error);
@@ -363,48 +387,37 @@ exports.getModulesStructure = async (req, res) => {
                 }
             },
             ticket_management: {
-                label: 'Ticket Management',
+                label: 'Task Management',
                 permissions: {
-                    read: 'View Tickets',
-                    write: 'Create Tickets',
-                    update: 'Update Tickets (Status, Assignments)',
-                    delete: 'Delete Tickets'
-                }
-            },
-            employee_management: {
-                label: 'Employee Management',
-                permissions: {
-                    read: 'View Employees',
-                    write: 'Create Employees',
-                    update: 'Update Employee Details',
-                    delete: 'Remove Employees'
+                    read: 'Open Task Management',
+                    pending: 'View Pending tab',
+                    assigned: 'View Assigned / In Progress tab',
+                    resolved: 'View Resolved tab',
+                    student: 'View Student requests',
+                    faculty: 'View Faculty requests',
+                    write: 'Create Tasks',
+                    update: 'Update Tasks (Status, Assignments)',
+                    delete: 'Delete Tasks'
                 }
             },
             category_management: {
-                label: 'Category Management',
+                label: 'Configuration',
                 permissions: {
-                    read: 'View Categories',
+                    read: 'View Categories & SLAs',
                     write: 'Create Categories',
                     update: 'Update Categories',
                     delete: 'Delete Categories'
                 }
             },
-            ticket_reports: {
-                label: 'Reports & Analytics',
+            employee_management: {
+                label: 'User Management',
                 permissions: {
-                    read: 'View Reports',
-                    write: 'Generate Reports',
-                    update: 'Customize Reports',
-                    delete: 'Delete Reports'
-                }
-            },
-            ticket_settings: {
-                label: 'System Settings',
-                permissions: {
-                    read: 'View Settings',
-                    write: 'Create Settings',
-                    update: 'Update Settings',
-                    delete: 'Delete Settings'
+                    read: 'Open User Management',
+                    users: 'View Users tab',
+                    roles: 'View Roles tab',
+                    write: 'Create Users',
+                    update: 'Update Users',
+                    delete: 'Remove Users'
                 }
             }
         };

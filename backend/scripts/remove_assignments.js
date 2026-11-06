@@ -1,35 +1,33 @@
 require('dotenv').config();
-const { sequelize } = require('../config/database');
+const { masterPool } = require('../config/database');
 
 async function removeAssignments() {
     try {
-        const ticketNumber = 'TKT-2026-352800-521';
-        console.log(`Connecting to database to remove assignments for ${ticketNumber}...`);
+        const complaintNumber = process.env.COMPLAINT_NUMBER;
+        if (!complaintNumber) throw new Error('Set COMPLAINT_NUMBER before running this script.');
+        console.log(`Connecting to database to remove assignments for ${complaintNumber}...`);
         
-        // Find the internal ticket ID
-        const [tickets] = await sequelize.query(`SELECT id FROM tickets WHERE ticket_number = ?`, {
-            replacements: [ticketNumber]
-        });
+        const [complaints] = await masterPool.query(
+            'SELECT id FROM complaints WHERE complaint_number = ?',
+            [complaintNumber]
+        );
         
-        if (tickets.length === 0) {
-            console.log(`Ticket ${ticketNumber} not found.`);
-            process.exit(0);
+        if (complaints.length === 0) {
+            console.log(`Complaint ${complaintNumber} not found.`);
+            return;
         }
         
-        const internalId = tickets[0].id;
-        console.log(`Found ticket internal ID: ${internalId}`);
+        await masterPool.query(
+            "UPDATE complaints SET assignments = JSON_ARRAY(), updated_at = NOW() WHERE id = ?",
+            [complaints[0].id]
+        );
         
-        // Delete assignments
-        const [result] = await sequelize.query(`DELETE FROM ticket_assignments WHERE ticket_id = ?`, {
-            replacements: [internalId]
-        });
-        
-        console.log('Successfully deleted assignments.');
+        console.log('Successfully removed complaint assignments.');
         
     } catch (error) {
         console.error('Error:', error);
     } finally {
-        await sequelize.close();
+        await masterPool.end();
     }
 }
 

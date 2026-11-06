@@ -72,7 +72,7 @@ async function lookupRbacNames({ hrmsIds = [], usernames = [] }) {
     if (hrmsIds.length > 0) {
         try {
             const [rows] = await masterPool.query(
-                'SELECT hrms_id, username, name FROM rbac_users WHERE hrms_id IN (?) AND name IS NOT NULL',
+                'SELECT hrms_id, username, name FROM users WHERE hrms_id IN (?) AND name IS NOT NULL',
                 [hrmsIds]
             );
             rows.forEach((row) => {
@@ -88,7 +88,7 @@ async function lookupRbacNames({ hrmsIds = [], usernames = [] }) {
     if (unresolvedUsernames.length > 0) {
         try {
             const [rows] = await masterPool.query(
-                'SELECT username, name FROM rbac_users WHERE username IN (?) AND name IS NOT NULL',
+                'SELECT username, name FROM users WHERE username IN (?) AND name IS NOT NULL',
                 [unresolvedUsernames]
             );
             rows.forEach((row) => {
@@ -171,10 +171,10 @@ async function persistRequesterDisplayName(ticketId, name) {
     if (!ticketId || !name) return;
     try {
         await masterPool.query(
-            `UPDATE tickets
-             SET requester_display_name = ?
+            `UPDATE complaints
+             SET requester_name = ?
              WHERE id = ?
-               AND (requester_display_name IS NULL OR requester_display_name = '')`,
+               AND (requester_name IS NULL OR requester_name = '')`,
             [name, ticketId]
         );
     } catch (error) {
@@ -253,11 +253,12 @@ async function enrichTicketsRequesterNames(tickets, { persist = true } = {}) {
 async function backfillStaffRequesterNames() {
     try {
         const [tickets] = await masterPool.query(`
-            SELECT id, admission_number, requester_type, student_id,
-                   raised_by_rbac_id, raised_by_hrms_id, requester_display_name
-            FROM tickets
+            SELECT id, requester_identifier AS admission_number, requester_type,
+                   requester_user_id AS student_id, requester_user_id AS raised_by_rbac_id,
+                   requester_hrms_id AS raised_by_hrms_id, requester_name AS requester_display_name
+            FROM complaints
             WHERE requester_type = 'staff'
-               OR (student_id IS NULL AND (raised_by_hrms_id IS NOT NULL OR raised_by_rbac_id IS NOT NULL))
+               OR (requester_user_id IS NULL AND requester_hrms_id IS NOT NULL)
         `);
 
         const needsBackfill = tickets.filter((ticket) => !ticket.requester_display_name);

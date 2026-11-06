@@ -9,7 +9,7 @@ exports.getCategories = async (req, res) => {
             `SELECT 
         id, name, description, parent_id, is_active, display_order,
         created_at, updated_at
-      FROM complaint_categories
+      FROM categories
       ORDER BY display_order ASC, name ASC`
         );
 
@@ -57,7 +57,7 @@ exports.getCategory = async (req, res) => {
             `SELECT 
         id, name, description, parent_id, is_active, display_order,
         created_at, updated_at
-      FROM complaint_categories
+      FROM categories
       WHERE id = ? OR parent_id = ?
       ORDER BY display_order ASC, name ASC`,
             [id, id]
@@ -107,7 +107,7 @@ exports.createCategory = async (req, res) => {
         // If parent_id is provided, verify it exists and is a main category
         if (parent_id) {
             const [parent] = await masterPool.query(
-                'SELECT id, parent_id FROM complaint_categories WHERE id = ?',
+                'SELECT id, parent_id FROM categories WHERE id = ?',
                 [parent_id]
             );
 
@@ -127,7 +127,7 @@ exports.createCategory = async (req, res) => {
         }
 
         const [result] = await masterPool.query(
-            `INSERT INTO complaint_categories (name, description, parent_id, display_order)
+            `INSERT INTO categories (name, description, parent_id, display_order)
        VALUES (?, ?, ?, ?)`,
             [
                 name.trim(),
@@ -138,7 +138,7 @@ exports.createCategory = async (req, res) => {
         );
 
         const [newCategory] = await masterPool.query(
-            'SELECT * FROM complaint_categories WHERE id = ?',
+            'SELECT * FROM categories WHERE id = ?',
             [result.insertId]
         );
 
@@ -172,7 +172,7 @@ exports.updateCategory = async (req, res) => {
 
         // Check if category exists
         const [existing] = await masterPool.query(
-            'SELECT id, parent_id FROM complaint_categories WHERE id = ?',
+            'SELECT id, parent_id FROM categories WHERE id = ?',
             [id]
         );
 
@@ -187,7 +187,7 @@ exports.updateCategory = async (req, res) => {
         if (parent_id !== undefined && parent_id !== existing[0].parent_id) {
             if (parent_id) {
                 const [parent] = await masterPool.query(
-                    'SELECT id, parent_id FROM complaint_categories WHERE id = ?',
+                    'SELECT id, parent_id FROM categories WHERE id = ?',
                     [parent_id]
                 );
 
@@ -251,14 +251,14 @@ exports.updateCategory = async (req, res) => {
 
         updateValues.push(id);
 
-        const query = `UPDATE complaint_categories 
+        const query = `UPDATE categories
         SET ${updateFields.join(', ')}
         WHERE id = ?`;
 
         await masterPool.query(query, updateValues);
 
         const [updated] = await masterPool.query(
-            'SELECT * FROM complaint_categories WHERE id = ?',
+            'SELECT * FROM categories WHERE id = ?',
             [id]
         );
 
@@ -286,7 +286,7 @@ exports.deleteCategory = async (req, res) => {
 
         // Check if category exists
         const [existing] = await masterPool.query(
-            'SELECT id FROM complaint_categories WHERE id = ?',
+            'SELECT id FROM categories WHERE id = ?',
             [id]
         );
 
@@ -299,7 +299,7 @@ exports.deleteCategory = async (req, res) => {
 
         // Check if category has sub-categories
         const [subCategories] = await masterPool.query(
-            'SELECT id FROM complaint_categories WHERE parent_id = ?',
+            'SELECT id FROM categories WHERE parent_id = ?',
             [id]
         );
 
@@ -312,7 +312,7 @@ exports.deleteCategory = async (req, res) => {
 
         // Check if category is used in any tickets
         const [tickets] = await masterPool.query(
-            'SELECT id FROM tickets WHERE category_id = ? OR sub_category_id = ? LIMIT 1',
+            'SELECT id FROM complaints WHERE category_id = ? OR sub_category_id = ? LIMIT 1',
             [id, id]
         );
 
@@ -323,7 +323,7 @@ exports.deleteCategory = async (req, res) => {
             });
         }
 
-        await masterPool.query('DELETE FROM complaint_categories WHERE id = ?', [id]);
+        await masterPool.query('DELETE FROM categories WHERE id = ?', [id]);
 
         res.json({
             success: true,
@@ -347,7 +347,7 @@ exports.getActiveCategories = async (req, res) => {
         const [categories] = await masterPool.query(
             `SELECT 
         id, name, description, parent_id, is_active, display_order
-      FROM complaint_categories
+      FROM categories
       WHERE is_active = TRUE
       ORDER BY display_order ASC, name ASC`
         );

@@ -97,23 +97,6 @@ const startServer = async () => {
         console.log(`🌐 API available at: http://localhost:${PORT}/api`);
     });
 
-    // Run migrations in the background so API is available immediately
-    console.log('\n📦 Checking for pending migrations (background)...');
-    (async () => {
-        try {
-            const { runMigrations } = require('./migrations/migrate');
-            await runMigrations();
-            try {
-                const { backfillStaffRequesterNames } = require('./utils/requesterNames');
-                getHRMSConnection();
-                await backfillStaffRequesterNames();
-            } catch (backfillError) {
-                console.warn('⚠️  Requester name backfill skipped:', backfillError.message);
-            }
-        } catch (error) {
-            console.warn('⚠️  Migration check failed:', error.message);
-        }
-    })();
 };
 
 startServer();

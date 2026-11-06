@@ -3,10 +3,7 @@ import api from '../config/api';
 import { queryClient } from '../config/queryClient';
 import {
     MODULE_ROUTE_MAP,
-    getModuleKeyForPath,
-    getAllowedFrontendModules,
-    isFullAccessRole,
-    FRONTEND_MODULES
+    getModuleKeyForPath
 } from '../constants/rbac';
 
 // Re-export for backward compatibility
@@ -35,12 +32,25 @@ const resolveDefaultRoute = (user, userType = null) => {
 
     const type = userType || resolveUserType(user);
 
-    if (type === 'student' || type === 'requester') {
+    if ((type === 'student' || type === 'requester') && user.ticketAccess !== 'manage') {
         return '/student/dashboard';
     }
 
-    if (user?.role === 'worker' || user?.is_worker) {
-        return '/task-management';
+    const ticketPages = [
+        { module: 'ticket_dashboard', path: '/dashboard' },
+        { module: 'ticket_management', path: '/task-management' },
+        { module: 'category_management', path: '/configuration' },
+        { module: 'employee_management', path: '/user-management' }
+    ];
+    const firstAllowedPage = ticketPages.find(({ module }) => {
+        const permission = user.permissions?.[module];
+        if (typeof permission === 'boolean') return permission;
+        if (Array.isArray(permission)) return permission.includes('read');
+        return permission?.read === true;
+    });
+
+    if (user.ticketAccess === 'manage' || user.role === 'worker' || user.is_worker) {
+        return firstAllowedPage?.path || '/unauthorized';
     }
 
     return '/dashboard';
@@ -61,6 +71,7 @@ const useAuthStore = create((set) => {
         token: storedToken || null,
         isAuthenticated: !!storedToken,
         userType: resolvedUserType,
+        isLoading: !!storedToken,
 
         hasPermission: (module, action = 'read') => {
             const user = useAuthStore.getState().user;
@@ -105,7 +116,7 @@ const useAuthStore = create((set) => {
                 localStorage.setItem('userType', userType);
                 localStorage.removeItem('admin');
 
-                set({ user, token, isAuthenticated: true, userType });
+                set({ user, token, isAuthenticated: true, userType, isLoading: false });
                 return { success: true, redirectPath: resolveDefaultRoute(user, userType) };
             } catch (error) {
                 console.error('Login error:', error);
@@ -125,7 +136,7 @@ const useAuthStore = create((set) => {
             localStorage.setItem('token', token);
             localStorage.setItem('user', JSON.stringify(user));
             localStorage.setItem('userType', userType);
-            set({ user, token, isAuthenticated: true, userType });
+            set({ user, token, isAuthenticated: true, userType, isLoading: false });
         },
 
         updateUser: (userData) => set((state) => ({
@@ -153,7 +164,7 @@ const useAuthStore = create((set) => {
                 console.warn('Error during localStorage cleanup:', error);
             }
 
-            set({ user: null, token: null, isAuthenticated: false, userType: null });
+            set({ user: null, token: null, isAuthenticated: false, userType: null, isLoading: false });
         },
 
         verifyToken: async () => {
@@ -165,12 +176,12 @@ const useAuthStore = create((set) => {
                     localStorage.removeItem('admin');
                     const type = resolveUserType(user);
 
-                    set({ user, isAuthenticated: true, userType: type });
+                    set({ user, isAuthenticated: true, userType: type, isLoading: false });
                     return true;
                 }
                 throw new Error('Invalid response');
             } catch (error) {
-                set({ user: null, token: null, isAuthenticated: false, userType: null });
+                set({ user: null, token: null, isAuthenticated: false, userType: null, isLoading: false });
                 localStorage.removeItem('token');
                 localStorage.removeItem('user');
                 localStorage.removeItem('userType');

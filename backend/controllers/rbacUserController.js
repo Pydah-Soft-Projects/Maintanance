@@ -1,224 +1,75 @@
-const bcrypt = require('bcryptjs');
 const { masterPool } = require('../config/database');
+const employeeController = require('./employeeController');
 
-// Roles supported by Ticket App
-const ROLES = {
-    STAFF: 'staff',   // Ticket Manager
-    WORKER: 'worker', // Ticket Worker
-    SUPER_ADMIN: 'super_admin',
-    ADMIN: 'admin',
-    SUB_ADMIN: 'sub_admin'
-};
+const isAdmin = (user) => ['admin', 'super_admin'].includes(user?.role);
 
-// Helper: Determine which roles a user can manage
-const getAllowedRoles = (currentUserRole) => {
-    // Super Admins and Admins can create Staff (Managers) and Workers
-    if ([ROLES.SUPER_ADMIN, ROLES.ADMIN, ROLES.SUB_ADMIN].includes(currentUserRole)) {
-        return [ROLES.STAFF, ROLES.WORKER];
-    }
-    // Staff (Managers) can only create Workers
-    if (currentUserRole === ROLES.STAFF) {
-        return [ROLES.WORKER];
-    }
-    return [];
-};
-
-/**
- * Get users (Staff and Workers)
- */
-exports.getUsers = async (req, res) => {
+exports.getUsers = async (_req, res) => {
     try {
-        // Basic query to fetch users relevant to Ticket Management
-        // We include all staff and workers. 
-        // Admin/Super Admin might want to see everyone, but for this specific app context,
-        // we might prioritize these. However, EmployeeManagement filters client-side, 
-        // so sending more is fine, but let's stick to the table structure.
-
-        // Note: The main backend returns a lot of fields (college_id etc).
-        // We will return standard fields.
-
         const [rows] = await masterPool.query(`
-            SELECT 
-                u.id, u.name, u.email, u.phone, u.username, u.role, 
-                u.is_active, u.created_at, u.updated_at,
-                u.college_id, u.course_id, u.branch_id,
-                (
-                    SELECT COUNT(DISTINCT ta.ticket_id)
-                    FROM ticket_assignments ta
-                    JOIN tickets t ON ta.ticket_id = t.id
-                    WHERE ta.assigned_to = u.id 
-                    AND ta.is_active = TRUE
-                    AND t.status NOT IN ('closed', 'completed')
-                ) as active_tickets_count
-            FROM rbac_users u
-            WHERE u.is_active = 1 
+            SELECT u.id, u.name, u.email, u.phone, u.username, u.role,
+                   u.permissions, u.is_active, u.created_at, u.updated_at,
+                   u.college_id, u.is_ticket_employee, u.hrms_id,
+                   (SELECT COUNT(DISTINCT c.id)
+                    FROM complaints c,
+                    JSON_TABLE(c.assignments, '$[*]' COLUMNS (
+                        assigned_to INT PATH '$.assigned_to',
+                        assignment_active BOOLEAN PATH '$.is_active'
+                    )) a
+                    WHERE a.assigned_to = u.id AND a.assignment_active = TRUE
+                      AND c.status NOT IN ('closed', 'completed')) AS active_tickets_count
+            FROM users u
+            WHERE u.is_ticket_employee = 1 AND u.is_active = 1
             ORDER BY u.created_at DESC
         `);
-
-        // If we strictly want to filter by "Ticket App Users", we could add WHERE role IN (...)
-        // But the EmployeeManagement page processes the list.
-
-        res.json({
-            success: true,
-            data: rows
-        });
+        res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Get Users Error:', error);
         res.status(500).json({ success: false, message: 'Server error fetching users' });
     }
 };
 
-/**
- * Create new user
- */
 exports.createUser = async (req, res) => {
-    try {
-        const { name, email, phone, username, password, role } = req.body;
-        const currentUser = req.user;
-
-        if (!currentUser) {
-            return res.status(401).json({ success: false, message: 'Unauthorized' });
-        }
-
-        // 1. Validate Input
-        if (!name || !email || !username || !password || !role) {
-            return res.status(400).json({ success: false, message: 'Missing required fields' });
-        }
-
-        // 2. Validate Permission
-        const allowedRoles = getAllowedRoles(currentUser.role);
-
-        // If user is super_admin, they can technically create anything, but for this app context:
-        // We check if the requested role is in our explicit allowed list OR if user is super_admin.
-        const isSuper = [ROLES.SUPER_ADMIN, ROLES.ADMIN].includes(currentUser.role);
-
-        if (!isSuper && !allowedRoles.includes(role)) {
-            return res.status(403).json({
-                success: false,
-                message: `You are not authorized to create users with role: ${role}`
-            });
-        }
-
-        // 3. Check Duplicates
-        const [existing] = await masterPool.query(
-            'SELECT id FROM rbac_users WHERE email = ? OR username = ?',
-            [email, username]
-        );
-
-        if (existing.length > 0) {
-            return res.status(409).json({ success: false, message: 'username or email already exists' });
-        }
-
-        // 4. Hash Password
-        const hashedPassword = await bcrypt.hash(password, 10);
-
-        // 5. Determine initial permissions based on role
-        const { createDefaultTicketPermissions, createSuperAdminTicketPermissions } = require('../constants/rbac');
-        let initialPermissions = {};
-
-        if (role === 'super_admin' || role === 'admin') {
-            initialPermissions = createSuperAdminTicketPermissions();
-        } else if (role === 'sub_admin') {
-            initialPermissions = createDefaultTicketPermissions();
-        } else {
-            // For staff and worker, empty permissions (they don't use RBAC permissions)
-            initialPermissions = {};
-        }
-
-        // 6. Insert
-        // JSON fields (college_ids etc) are set to null/empty as these are global roles usually
-        const [result] = await masterPool.query(
-            `INSERT INTO rbac_users 
-            (name, email, phone, username, password, role, is_active, created_by, created_at, updated_at, 
-            permissions, college_ids, course_ids, branch_ids)
-            VALUES (?, ?, ?, ?, ?, ?, 1, ?, NOW(), NOW(), ?, ?, ?, ?)`,
-            [
-                name,
-                email,
-                phone,
-                username,
-                hashedPassword,
-                role,
-                currentUser.id,
-                JSON.stringify(initialPermissions), // Proper permissions based on role
-                JSON.stringify([]), // Empty college_ids
-                JSON.stringify([]), // Empty course_ids
-                JSON.stringify([])  // Empty branch_ids
-            ]
-        );
-
-        res.status(201).json({
-            success: true,
-            message: 'User created successfully',
-            data: { id: result.insertId, role, username, email }
-        });
-
-    } catch (error) {
-        console.error('Create User Error:', error);
-        // Handle specific SQL errors if needed
-        res.status(500).json({ success: false, message: error.message || 'Server error creating user' });
-    }
+    return employeeController.createEmployee(req, res);
 };
 
-/**
- * Update User
- */
 exports.updateUser = async (req, res) => {
+    return employeeController.updateEmployee(req, res);
+};
+
+exports.getHrmsDirectory = async (req, res) => {
+    return employeeController.getHrmsEmployees(req, res);
+};
+
+exports.linkHrmsUser = async (req, res) => {
+    return employeeController.createEmployee(req, res);
+};
+
+exports.updateUserAccess = async (req, res) => {
+    if (!isAdmin(req.user)) return res.status(403).json({ success: false, message: 'Admin access required' });
     try {
-        const { id } = req.params;
-        const { name, email, phone, username, password, role } = req.body;
-
-        // If password is provided, hash it
-        let passwordClause = '';
-        const params = [name, email, phone, username, role];
-
-        if (password && password.trim() !== '') {
-            const hashedPassword = await bcrypt.hash(password, 10);
-            passwordClause = ', password = ?';
-            params.push(hashedPassword);
+        const role = req.body.role;
+        const permissions = req.body.permissions;
+        const name = typeof req.body.name === 'string' ? req.body.name.trim() : '';
+        const id = Number(req.params.id);
+        if (!Number.isInteger(id)) {
+            return res.status(400).json({ success: false, message: 'Invalid user ID' });
         }
-
-        params.push(id);
-
-        const [result] = await masterPool.query(
-            `UPDATE rbac_users 
-             SET name=?, email=?, phone=?, username=?, role=?, updated_at=NOW() ${passwordClause}
-             WHERE id=?`,
-            params
+        const [users] = await masterPool.query('SELECT id, role FROM users WHERE id = ? AND is_active = 1', [id]);
+        if (!users.length) return res.status(404).json({ success: false, message: 'User not found' });
+        if (['admin', 'super_admin'].includes(users[0].role)) {
+            return res.status(403).json({ success: false, message: 'Administrator access cannot be changed here' });
+        }
+        await masterPool.query(
+            'UPDATE users SET name = COALESCE(NULLIF(?, \'\'), name), role = COALESCE(?, role), permissions = ?, updated_at = NOW() WHERE id = ?',
+            [name, role, permissions ? JSON.stringify(permissions) : null, id]
         );
-
-        if (result.affectedRows === 0) {
-            return res.status(404).json({ success: false, message: 'User not found' });
-        }
-
-        res.json({ success: true, message: 'User updated successfully' });
-
+        res.json({ success: true, message: 'User access updated' });
     } catch (error) {
-        console.error('Update User Error:', error);
-        res.status(500).json({ success: false, message: 'Server error updating user' });
+        console.error('Update User Access Error:', error);
+        res.status(500).json({ success: false, message: 'Server error updating user access' });
     }
 };
 
-/**
- * Delete User (Soft Delete)
- */
 exports.deleteUser = async (req, res) => {
-    try {
-        const { id } = req.params;
-
-        // Soft delete by setting is_active = 0
-        const [result] = await masterPool.query(
-            'UPDATE rbac_users SET is_active = 0, updated_at = NOW() WHERE id = ?',
-            [id]
-        );
-
-        if (result.affectedRows === 0) {
-            return res.status(404).json({ success: false, message: 'User not found' });
-        }
-
-        res.json({ success: true, message: 'User deleted successfully' });
-    } catch (error) {
-        console.error('Delete User Error:', error);
-        res.status(500).json({ success: false, message: 'Server error deleting user' });
-    }
+    return employeeController.deleteEmployee(req, res);
 };

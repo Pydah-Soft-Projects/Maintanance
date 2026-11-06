@@ -7,7 +7,10 @@ const authMiddleware = require('../middleware/auth');
 router.use(authMiddleware);
 
 router.get('/', rbacUserController.getUsers);
+router.get('/hrms-directory', rbacUserController.getHrmsDirectory);
+router.post('/hrms-link', rbacUserController.linkHrmsUser);
 router.post('/', rbacUserController.createUser);
+router.put('/:id/access', rbacUserController.updateUserAccess);
 router.put('/:id', rbacUserController.updateUser);
 router.delete('/:id', rbacUserController.deleteUser);
 

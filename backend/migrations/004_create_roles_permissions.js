@@ -46,36 +46,28 @@ async function up() {
             ticket_dashboard: { read: true },
             ticket_management: { read: true, write: true, update: true, delete: true },
             employee_management: { read: true, write: true, update: true, delete: true },
-            category_management: { read: true, write: true, update: true, delete: true },
-            ticket_reports: { read: true, write: true, update: true, delete: true },
-            ticket_settings: { read: true, write: true, update: true, delete: true }
+            category_management: { read: true, write: true, update: true, delete: true }
         };
 
         const adminPermissions = {
             ticket_dashboard: { read: true },
             ticket_management: { read: true, write: true, update: true, delete: true },
             employee_management: { read: true, write: true, update: true, delete: false },
-            category_management: { read: true, write: true, update: true, delete: false },
-            ticket_reports: { read: true, write: true, update: false, delete: false },
-            ticket_settings: { read: true, write: false, update: false, delete: false }
+            category_management: { read: true, write: true, update: true, delete: false }
         };
 
         const managerPermissions = {
             ticket_dashboard: { read: true },
             ticket_management: { read: true, write: true, update: true, delete: false },
             employee_management: { read: true, write: true, update: false, delete: false },
-            category_management: { read: true, write: false, update: false, delete: false },
-            ticket_reports: { read: true, write: false, update: false, delete: false },
-            ticket_settings: { read: false, write: false, update: false, delete: false }
+            category_management: { read: true, write: false, update: false, delete: false }
         };
 
         const workerPermissions = {
             ticket_dashboard: { read: true },
             ticket_management: { read: true, write: false, update: true, delete: false },
             employee_management: { read: false, write: false, update: false, delete: false },
-            category_management: { read: true, write: false, update: false, delete: false },
-            ticket_reports: { read: false, write: false, update: false, delete: false },
-            ticket_settings: { read: false, write: false, update: false, delete: false }
+            category_management: { read: true, write: false, update: false, delete: false }
         };
 
         // Insert default system roles

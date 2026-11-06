@@ -9,32 +9,37 @@ export const TICKET_MODULES = {
     DASHBOARD: 'ticket_dashboard',
     TICKET_MANAGEMENT: 'ticket_management',
     EMPLOYEE_MANAGEMENT: 'employee_management',
-    CATEGORY_MANAGEMENT: 'category_management',
-    REPORTS: 'ticket_reports',
-    SETTINGS: 'ticket_settings'
+    CATEGORY_MANAGEMENT: 'category_management'
 };
 
 // Granular Permissions for each ticket module
 export const TICKET_MODULE_PERMISSIONS = {
     [TICKET_MODULES.DASHBOARD]: {
-        permissions: ['view'],
+        permissions: ['read'],
         labels: {
-            view: 'View Dashboard'
+            read: 'View Dashboard'
         }
     },
     [TICKET_MODULES.TICKET_MANAGEMENT]: {
-        permissions: ['read', 'write', 'update', 'delete'],
+        permissions: ['read', 'pending', 'assigned', 'resolved', 'student', 'faculty', 'write', 'update', 'delete'],
         labels: {
-            read: 'View Tickets',
+            read: 'Open Task Management',
+            pending: 'View Pending tab',
+            assigned: 'View Assigned / In Progress tab',
+            resolved: 'View Resolved tab',
+            student: 'View Student requests',
+            faculty: 'View Faculty requests',
             write: 'Create Tickets',
             update: 'Update Tickets (Status, Assignments)',
             delete: 'Delete Tickets'
         }
     },
     [TICKET_MODULES.EMPLOYEE_MANAGEMENT]: {
-        permissions: ['read', 'write', 'update', 'delete'],
+        permissions: ['read', 'users', 'roles', 'write', 'update', 'delete'],
         labels: {
-            read: 'View Employees',
+            read: 'Open User Management',
+            users: 'View Users tab',
+            roles: 'View Roles tab',
             write: 'Create Employees (Managers/Workers)',
             update: 'Update Employee Details',
             delete: 'Remove Employees'
@@ -48,35 +53,15 @@ export const TICKET_MODULE_PERMISSIONS = {
             update: 'Update Categories',
             delete: 'Delete Categories'
         }
-    },
-    [TICKET_MODULES.REPORTS]: {
-        permissions: ['read', 'write', 'update', 'delete'],
-        labels: {
-            read: 'View Reports',
-            write: 'Generate Reports',
-            update: 'Customize Reports',
-            delete: 'Delete Reports'
-        }
-    },
-    [TICKET_MODULES.SETTINGS]: {
-        permissions: ['read', 'write', 'update', 'delete'],
-        labels: {
-            read: 'View Settings',
-            write: 'Create Settings',
-            update: 'Update Settings',
-            delete: 'Delete Settings'
-        }
     }
 };
 
 // Module Labels for UI
 export const TICKET_MODULE_LABELS = {
     [TICKET_MODULES.DASHBOARD]: 'Dashboard',
-    [TICKET_MODULES.TICKET_MANAGEMENT]: 'Ticket Management',
-    [TICKET_MODULES.EMPLOYEE_MANAGEMENT]: 'Employee Management',
-    [TICKET_MODULES.CATEGORY_MANAGEMENT]: 'Category Management',
-    [TICKET_MODULES.REPORTS]: 'Reports & Analytics',
-    [TICKET_MODULES.SETTINGS]: 'System Settings'
+    [TICKET_MODULES.TICKET_MANAGEMENT]: 'Task Management',
+    [TICKET_MODULES.EMPLOYEE_MANAGEMENT]: 'User Management',
+    [TICKET_MODULES.CATEGORY_MANAGEMENT]: 'Configuration'
 };
 
 // User Roles specific to Ticket App

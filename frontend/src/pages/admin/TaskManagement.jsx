@@ -17,6 +17,7 @@ import api from '../../config/api';
 import toast from 'react-hot-toast';
 import TicketDetailsModal from '../../components/admin/TicketDetailsModal';
 import { TaskManagementSkeleton } from '../../components/SkeletonLoader';
+import useAuthStore from '../../store/authStore';
 import '../../styles/admin-pages.css';
 
 const STATUS_COLORS = {
@@ -57,8 +58,18 @@ const getRequesterLabel = (ticket) =>
     'Unknown';
 
 const TaskManagement = () => {
-    const [requesterAudience, setRequesterAudience] = useState('student');
-    const [activeTab, setActiveTab] = useState('pending'); // pending, assigned, resolved
+    const hasPermission = useAuthStore((state) => state.hasPermission);
+    const [selectedRequesterAudience, setRequesterAudience] = useState('student');
+    const [selectedTab, setActiveTab] = useState('pending'); // pending, assigned, resolved
+    const allowedAudiences = REQUESTER_AUDIENCES
+        .map(({ id }) => id)
+        .filter((audience) => hasPermission('ticket_management', audience));
+    const allowedTabs = ['pending', 'assigned', 'resolved']
+        .filter((tab) => hasPermission('ticket_management', tab));
+    const requesterAudience = allowedAudiences.includes(selectedRequesterAudience)
+        ? selectedRequesterAudience
+        : allowedAudiences[0];
+    const activeTab = allowedTabs.includes(selectedTab) ? selectedTab : allowedTabs[0];
     const [filters, setFilters] = useState({
         category_id: '',
         assigned_to: '',
@@ -89,17 +100,22 @@ const TaskManagement = () => {
 
     // Queries
     const { data: audienceCounts } = useQuery({
-        queryKey: ['ticket-audience-counts'],
+        queryKey: ['ticket-audience-counts', allowedAudiences],
         queryFn: async () => {
             const [studentRes, facultyRes] = await Promise.all([
-                api.get('/tickets?requester_type=student&page=1&limit=1'),
-                api.get('/tickets?requester_type=staff&page=1&limit=1')
+                allowedAudiences.includes('student')
+                    ? api.get('/tickets?requester_type=student&page=1&limit=1')
+                    : Promise.resolve(null),
+                allowedAudiences.includes('faculty')
+                    ? api.get('/tickets?requester_type=staff&page=1&limit=1')
+                    : Promise.resolve(null)
             ]);
             return {
-                student: studentRes.data?.pagination?.total ?? 0,
-                faculty: facultyRes.data?.pagination?.total ?? 0
+                student: studentRes?.data?.pagination?.total ?? 0,
+                faculty: facultyRes?.data?.pagination?.total ?? 0
             };
-        }
+        },
+        enabled: allowedAudiences.length > 0
     });
 
     const { data: ticketsData, isLoading } = useQuery({
@@ -113,7 +129,8 @@ const TaskManagement = () => {
             return response.data;
         },
         staleTime: 0,
-        refetchOnMount: 'always'
+        refetchOnMount: 'always',
+        enabled: Boolean(requesterAudience && activeTab)
     });
 
     const { data: ticketDetails, isLoading: ticketDetailsLoading } = useQuery({
@@ -267,7 +284,7 @@ const TaskManagement = () => {
         <div className="admin-page-container">
             {/* Requester audience selector */}
             <div className="admin-audience-selector animate-fade-in">
-                {REQUESTER_AUDIENCES.map(({ id, label, icon: Icon }) => (
+                {REQUESTER_AUDIENCES.filter(({ id }) => allowedAudiences.includes(id)).map(({ id, label, icon: Icon }) => (
                     <button
                         key={id}
                         type="button"
@@ -291,6 +308,7 @@ const TaskManagement = () => {
                         <button
                             onClick={() => setActiveTab('pending')}
                             className={`admin-tab-btn ${activeTab === 'pending' ? 'active-pending' : ''}`}
+                            hidden={!allowedTabs.includes('pending')}
                         >
                             <Clock size={16} /> Pending
                             <span className="admin-tab-count">{getTabCount('pending')}</span>
@@ -298,6 +316,7 @@ const TaskManagement = () => {
                         <button
                             onClick={() => setActiveTab('assigned')}
                             className={`admin-tab-btn ${activeTab === 'assigned' ? 'active-assigned' : ''}`}
+                            hidden={!allowedTabs.includes('assigned')}
                         >
                             <UserPlus size={16} /> Assigned / In Progress
                             <span className="admin-tab-count">{getTabCount('assigned')}</span>
@@ -305,6 +324,7 @@ const TaskManagement = () => {
                         <button
                             onClick={() => setActiveTab('resolved')}
                             className={`admin-tab-btn ${activeTab === 'resolved' ? 'active-resolved' : ''}`}
+                            hidden={!allowedTabs.includes('resolved')}
                         >
                             <CheckCircle size={16} /> Resolved
                             <span className="admin-tab-count">{getTabCount('resolved')}</span>

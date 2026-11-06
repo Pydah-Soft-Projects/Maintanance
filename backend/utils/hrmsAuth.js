@@ -34,16 +34,18 @@ function resolveHrmsRole(hrmsMatchedObj, empDoc, userDoc) {
     return role || DEFAULT_HRMS_ROLE;
 }
 
-async function findLocalRbacUser(masterPool, { hrmsIdStr, email, username }) {
-    const [byHrmsId] = await masterPool.query(
-        'SELECT * FROM rbac_users WHERE hrms_id = ? LIMIT 1',
-        [hrmsIdStr]
-    );
-    if (byHrmsId.length > 0) return byHrmsId[0];
+async function findLocalRbacUser(masterPool, { hrmsIdStr, email, username, empNo }) {
+    if (hrmsIdStr) {
+        const [byHrmsId] = await masterPool.query(
+            "SELECT * FROM users WHERE hrms_id = ? AND is_active = 1 AND is_ticket_employee = 1 LIMIT 1",
+            [hrmsIdStr]
+        );
+        if (byHrmsId.length > 0) return byHrmsId[0];
+    }
 
     if (email && email.includes('@') && !email.endsWith('@hrms.ticket.local')) {
         const [byEmail] = await masterPool.query(
-            'SELECT * FROM rbac_users WHERE email = ? LIMIT 1',
+            "SELECT * FROM users WHERE email = ? AND is_active = 1 AND is_ticket_employee = 1 LIMIT 1",
             [email]
         );
         if (byEmail.length > 0) return byEmail[0];
@@ -51,32 +53,33 @@ async function findLocalRbacUser(masterPool, { hrmsIdStr, email, username }) {
 
     if (username) {
         const [byUsername] = await masterPool.query(
-            'SELECT * FROM rbac_users WHERE username = ? LIMIT 1',
+            "SELECT * FROM users WHERE username = ? AND is_active = 1 AND is_ticket_employee = 1 LIMIT 1",
             [username]
         );
         if (byUsername.length > 0) return byUsername[0];
     }
 
+    if (empNo) {
+        const [byEmpNo] = await masterPool.query(
+            "SELECT * FROM users WHERE username = ? AND is_active = 1 AND is_ticket_employee = 1 LIMIT 1",
+            [String(empNo).toLowerCase().trim()]
+        );
+        if (byEmpNo.length > 0) return byEmpNo[0];
+    }
+
     return null;
 }
 
-async function syncExistingRbacUser(masterPool, existing, {
-    hrmsIdStr,
-    mappedName,
-    mappedEmail,
-    mappedPhone,
-    mappedUsername
-}) {
+async function syncExistingRbacUser(masterPool, existing, { hrmsIdStr }) {
     await masterPool.query(
-        `UPDATE rbac_users
-         SET hrms_id = ?, name = COALESCE(?, name), email = ?, phone = COALESCE(?, phone),
-             username = COALESCE(?, username), updated_at = NOW()
+        `UPDATE users
+         SET hrms_id = ?, updated_at = NOW()
          WHERE id = ?`,
-        [hrmsIdStr, mappedName, mappedEmail, mappedPhone, mappedUsername, existing.id]
+        [hrmsIdStr, existing.id]
     );
 
     const [syncedUsers] = await masterPool.query(
-        'SELECT * FROM rbac_users WHERE id = ? LIMIT 1',
+        'SELECT * FROM users WHERE id = ? LIMIT 1',
         [existing.id]
     );
     return syncedUsers[0];
@@ -105,8 +108,8 @@ function buildHrmsSessionProfile({
 
 /**
  * Authenticate against HRMS MongoDB.
- * - If a linked rbac_users row exists: sync profile fields only (no new User Management rows).
- * - Otherwise: return a ticket-only HRMS session profile (no rbac_users INSERT).
+ * - If a linked users row exists: refresh the HRMS link without overwriting local profile or access fields.
+ * - Otherwise: return a ticket-only HRMS session profile (no local user INSERT).
  *
  * @returns {Promise<{ rbacUser?: object, hrmsProfile?: object } | null>}
  */
@@ -197,20 +200,15 @@ async function authenticateHRMSUser(username, password, masterPool) {
         const existing = await findLocalRbacUser(masterPool, {
             hrmsIdStr,
             email: normalizedEmail,
-            username: normalizedUsername
+            username: normalizedUsername,
+            empNo: empDoc?.emp_no
         });
 
         if (existing) {
-            const rbacUser = await syncExistingRbacUser(masterPool, existing, {
-                hrmsIdStr,
-                mappedName,
-                mappedEmail: normalizedEmail,
-                mappedPhone,
-                mappedUsername: normalizedUsername
-            });
+            const rbacUser = await syncExistingRbacUser(masterPool, existing, { hrmsIdStr });
 
             if (!rbacUser.is_active) {
-                const err = new Error('Account deactivated');
+                const err = new Error('Account deactivated on this site');
                 err.statusCode = 403;
                 throw err;
             }
@@ -218,16 +216,12 @@ async function authenticateHRMSUser(username, password, masterPool) {
             return { rbacUser };
         }
 
-        return {
-            hrmsProfile: buildHrmsSessionProfile({
-                hrmsIdStr,
-                mappedName,
-                mappedEmail: normalizedEmail,
-                mappedPhone,
-                mappedUsername: normalizedUsername,
-                mappedRole
-            })
-        };
+        // Credentials are valid in HRMS, but user does not exist on our site.
+        // User must be created/linked in User Management on our site first.
+        const notRegisteredErr = new Error('Your account is not registered on this site. Please contact an administrator to grant access.');
+        notRegisteredErr.statusCode = 403;
+        notRegisteredErr.code = 'NOT_REGISTERED_ON_SITE';
+        throw notRegisteredErr;
     } catch (error) {
         if (error.statusCode) throw error;
         console.error('HRMS Login Error:', error);

@@ -5,9 +5,7 @@ const TICKET_MODULES = new Set([
     'ticket_dashboard',
     'ticket_management',
     'employee_management',
-    'category_management',
-    'ticket_reports',
-    'ticket_settings'
+    'category_management'
 ]);
 
 /**
@@ -18,9 +16,9 @@ async function resolveTicketAccessMode(masterPool, userId, role, isWorker = fals
     if (isWorker) return 'manage';
     if (TICKET_MANAGER_ROLES.has(role)) return 'manage';
 
-    // Check ticket_employees table (staff/worker assigned to ticket app)
+    // Check whether the user has ticket access in the unified users table.
     const [rows] = await masterPool.query(
-        'SELECT id FROM ticket_employees WHERE rbac_user_id = ? AND is_active = 1 LIMIT 1',
+        'SELECT id FROM users WHERE id = ? AND is_ticket_employee = 1 AND is_active = 1 LIMIT 1',
         [userId]
     );
     if (rows.length > 0) return 'manage';

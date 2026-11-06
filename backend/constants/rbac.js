@@ -27,9 +27,7 @@ const MODULES = {
     DASHBOARD: 'ticket_dashboard',
     TICKET_MANAGEMENT: 'ticket_management',
     EMPLOYEE_MANAGEMENT: 'employee_management',
-    CATEGORY_MANAGEMENT: 'category_management',
-    REPORTS: 'ticket_reports',
-    SETTINGS: 'ticket_settings'
+    CATEGORY_MANAGEMENT: 'category_management'
 };
 
 // Map backend modules to frontend routes
@@ -37,9 +35,7 @@ const MODULE_ROUTE_MAP = {
     [MODULES.DASHBOARD]: '/',
     [MODULES.TICKET_MANAGEMENT]: '/tickets',
     [MODULES.EMPLOYEE_MANAGEMENT]: '/employees',
-    [MODULES.CATEGORY_MANAGEMENT]: '/categories',
-    [MODULES.REPORTS]: '/reports',
-    [MODULES.SETTINGS]: '/settings'
+    [MODULES.CATEGORY_MANAGEMENT]: '/categories'
 };
 
 // Permission Levels
@@ -94,6 +90,17 @@ const createDefaultTicketPermissions = () => {
             delete: false
         };
     });
+    Object.assign(permissions[MODULES.TICKET_MANAGEMENT], {
+        pending: false,
+        assigned: false,
+        resolved: false,
+        student: false,
+        faculty: false
+    });
+    Object.assign(permissions[MODULES.EMPLOYEE_MANAGEMENT], {
+        users: false,
+        roles: false
+    });
     return permissions;
 };
 
@@ -107,6 +114,17 @@ const createSuperAdminTicketPermissions = () => {
             update: true,
             delete: true
         };
+    });
+    Object.assign(permissions[MODULES.TICKET_MANAGEMENT], {
+        pending: true,
+        assigned: true,
+        resolved: true,
+        student: true,
+        faculty: true
+    });
+    Object.assign(permissions[MODULES.EMPLOYEE_MANAGEMENT], {
+        users: true,
+        roles: true
     });
     return permissions;
 };

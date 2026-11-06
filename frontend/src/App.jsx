@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 
@@ -13,23 +13,17 @@ import AuthCallback from './pages/AuthCallback';
 // Admin Pages
 import AdminDashboard from './pages/admin/Dashboard';
 import TicketConfiguration from './pages/admin/TicketConfiguration';
-import EmployeeManagement from './pages/admin/EmployeeManagement';
+import UserManagement from './pages/admin/UserManagement';
 import TaskManagement from './pages/admin/TaskManagement';
-import SubAdminCreation from './pages/admin/SubAdminCreation';
-import RoleManagement from './pages/admin/RoleManagement';
 
 // Student Pages
 import Dashboard from './pages/student/Dashboard';
 import RaiseTicket from './pages/student/RaiseTicket';
 import MyTickets from './pages/student/MyTickets';
-import { isHrmsOnlyTicketUser } from './utils/hrmsPortal';
 
 // Store & Components
 import useAuthStore from './store/authStore';
 import LoadingAnimation from './components/LoadingAnimation';
-
-// RBAC
-import { FRONTEND_MODULES } from './constants/rbac';
 
 const ProtectedRoute = ({ children, allowedRoles, requiredPermission }) => {
   const { isAuthenticated, user, userType, hasPermission, isLoading } = useAuthStore();
@@ -69,15 +63,22 @@ const ProtectedRoute = ({ children, allowedRoles, requiredPermission }) => {
   return children;
 };
 
+const PermissionRoute = ({ children, module, requiredGroups = [] }) => {
+  const hasPermission = useAuthStore((state) => state.hasPermission);
+  if (
+    !hasPermission(module, 'read') ||
+    requiredGroups.some((actions) => !actions.some((action) => hasPermission(module, action)))
+  ) {
+    return <Navigate to="/unauthorized" replace />;
+  }
+  return children;
+};
+
 const StudentDefaultRedirect = () => {
   return <Navigate to="dashboard" replace />;
 };
 
 const DashboardRoute = () => {
-  const { user } = useAuthStore();
-  if (user?.role === 'worker' || user?.is_worker) {
-    return <Navigate to="/task-management" replace />;
-  }
   return <AdminDashboard />;
 };
 
@@ -92,6 +93,13 @@ const AdminOnlyRoute = ({ children }) => {
 
 const App = () => {
   const { isLoading } = useAuthStore();
+
+  useEffect(() => {
+    const { token, verifyToken } = useAuthStore.getState();
+    if (token) {
+      void verifyToken();
+    }
+  }, []);
 
   if (isLoading) {
     return (
@@ -136,12 +144,33 @@ const App = () => {
             </ProtectedRoute>
           }
         >
-          <Route path="dashboard" element={<DashboardRoute />} />
-          <Route path="configuration" element={<TicketConfiguration />} />
-          <Route path="employees" element={<EmployeeManagement />} />
-          <Route path="task-management" element={<TaskManagement />} />
-          <Route path="sub-admins" element={<AdminOnlyRoute><SubAdminCreation /></AdminOnlyRoute>} />
-          <Route path="roles" element={<AdminOnlyRoute><RoleManagement /></AdminOnlyRoute>} />
+          <Route path="dashboard" element={<PermissionRoute module="ticket_dashboard"><DashboardRoute /></PermissionRoute>} />
+          <Route path="configuration" element={<PermissionRoute module="category_management"><TicketConfiguration /></PermissionRoute>} />
+          <Route
+            path="user-management"
+            element={
+              <PermissionRoute module="employee_management" requiredGroups={[['users', 'roles']]}>
+                <UserManagement />
+              </PermissionRoute>
+            }
+          />
+          <Route
+            path="task-management"
+            element={
+              <PermissionRoute
+                module="ticket_management"
+                requiredGroups={[
+                  ['pending', 'assigned', 'resolved'],
+                  ['student', 'faculty']
+                ]}
+              >
+                <TaskManagement />
+              </PermissionRoute>
+            }
+          />
+          <Route path="employees" element={<Navigate to="/user-management" replace />} />
+          <Route path="sub-admins" element={<AdminOnlyRoute><Navigate to="/user-management" replace /></AdminOnlyRoute>} />
+          <Route path="roles" element={<Navigate to="/user-management?tab=roles" replace />} />
           <Route path="tickets" element={<Navigate to="/task-management" replace />} />
           <Route path="unauthorized" element={
             <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 text-gray-800">

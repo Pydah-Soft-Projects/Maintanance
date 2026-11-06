@@ -30,7 +30,7 @@ const authMiddleware = (req, res, next) => {
         if (decoded.admissionNumber && !decoded.admission_number) {
             decoded.admission_number = decoded.admissionNumber;
         }
-        if (decoded.hrmsId && !decoded.is_hrms_session) {
+        if (!decoded.id && decoded.hrmsId && !decoded.is_hrms_session) {
             decoded.is_hrms_session = true;
         }
 

@@ -12,29 +12,37 @@ import {
 } from 'react-icons/fi';
 import { getRoles, createRole, updateRole, deleteRole } from '../../services/roleService';
 import PermissionMatrix from '../../components/admin/PermissionMatrix';
+import useAuthStore from '../../store/authStore';
 import './RoleManagement.css';
+
+const EXCLUDED_EXTERNAL_ROLES = new Set([
+    'branch_hod',
+    'college_ao',
+    'college_principal',
+    'office_assistant',
+    'cashier',
+    'faculty',
+    'head_student_clubs',
+    'pydah_coe',
+    'student'
+]);
 
 const MODULE_CONFIG = {
     ticket_dashboard: { label: 'Dashboard', chipClass: 'chip-blue' },
-    ticket_management: { label: 'Ticket Management', chipClass: 'chip-emerald' },
-    employee_management: { label: 'Employee Management', chipClass: 'chip-purple' },
-    category_management: { label: 'Category Management', chipClass: 'chip-amber' },
-    ticket_reports: { label: 'Reports', chipClass: 'chip-rose' },
-    ticket_settings: { label: 'Settings', chipClass: 'chip-slate' }
+    ticket_management: { label: 'Task Management', chipClass: 'chip-emerald' },
+    category_management: { label: 'Configuration', chipClass: 'chip-amber' },
+    employee_management: { label: 'User Management', chipClass: 'chip-purple' }
 };
 
 const getActiveModules = (permissions) => {
     if (!permissions || typeof permissions !== 'object') return [];
 
-    return Object.entries(permissions)
-        .map(([key, perms]) => {
+    return Object.entries(MODULE_CONFIG)
+        .map(([key, config]) => {
+            const perms = permissions[key];
             if (!perms || typeof perms !== 'object') return null;
             const grantedCount = Object.values(perms).filter(Boolean).length;
             if (grantedCount === 0) return null;
-            const config = MODULE_CONFIG[key] || {
-                label: key.replace('ticket_', '').replace(/_/g, ' '),
-                chipClass: 'chip-slate'
-            };
             return {
                 key,
                 label: config.label,
@@ -46,6 +54,8 @@ const getActiveModules = (permissions) => {
 };
 
 const RoleManagement = () => {
+    const currentUser = useAuthStore((state) => state.user);
+    const canManageRoles = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
     const [roles, setRoles] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
@@ -117,11 +127,26 @@ const RoleManagement = () => {
     const initializeEmptyPermissions = () => {
         return {
             ticket_dashboard: { read: false },
-            ticket_management: { read: false, write: false, update: false, delete: false },
-            employee_management: { read: false, write: false, update: false, delete: false },
+            ticket_management: {
+                read: false,
+                pending: false,
+                assigned: false,
+                resolved: false,
+                student: false,
+                faculty: false,
+                write: false,
+                update: false,
+                delete: false
+            },
             category_management: { read: false, write: false, update: false, delete: false },
-            ticket_reports: { read: false, write: false, update: false, delete: false },
-            ticket_settings: { read: false, write: false, update: false, delete: false }
+            employee_management: {
+                read: false,
+                users: false,
+                roles: false,
+                write: false,
+                update: false,
+                delete: false
+            }
         };
     };
 
@@ -163,19 +188,21 @@ const RoleManagement = () => {
 
         try {
             await deleteRole(roleId);
-            setSuccess('Role deleted successfully!');
+            setSuccess(`Role "${roleName}" deleted successfully!`);
             await fetchRoles();
             setTimeout(() => setSuccess(''), 3000);
         } catch (err) {
             console.error('Error deleting role:', err);
-            setError(err.message || 'Failed to delete role');
-            setTimeout(() => setError(''), 3000);
+            setError(err.message || err.response?.data?.message || 'Failed to delete role');
+            setTimeout(() => setError(''), 4000);
         }
     };
 
-    // Filtered roles based on search and type filter
+    // Filtered roles based on search and type filter (excluding other databases' roles)
     const filteredRoles = useMemo(() => {
         return roles.filter(role => {
+            if (EXCLUDED_EXTERNAL_ROLES.has(role.role_name)) return false;
+
             const matchesFilter =
                 roleFilter === 'all' ? true :
                 roleFilter === 'system' ? Boolean(role.is_system_role) :
@@ -194,12 +221,13 @@ const RoleManagement = () => {
         });
     }, [roles, roleFilter, searchQuery]);
 
-    // Statistics
+    // Statistics (excluding other databases' roles)
     const stats = useMemo(() => {
-        const total = roles.length;
-        const system = roles.filter(r => r.is_system_role).length;
+        const validRoles = roles.filter(r => !EXCLUDED_EXTERNAL_ROLES.has(r.role_name));
+        const total = validRoles.length;
+        const system = validRoles.filter(r => r.is_system_role).length;
         const custom = total - system;
-        const totalUsers = roles.reduce((acc, r) => acc + (Number(r.employee_count) || 0), 0);
+        const totalUsers = validRoles.reduce((acc, r) => acc + (Number(r.employee_count) || 0), 0);
         return { total, system, custom, totalUsers };
     }, [roles]);
 
@@ -342,14 +370,14 @@ const RoleManagement = () => {
                         </button>
                     </div>
 
-                    <button
+                    {canManageRoles && <button
                         type="button"
                         className="btn-primary shrink-0"
                         onClick={() => handleOpenModal()}
                     >
                         <FiPlus size={16} />
                         <span>Create Role</span>
-                    </button>
+                    </button>}
                 </div>
 
                 {/* Mobile Scroll Affordance */}
@@ -374,6 +402,7 @@ const RoleManagement = () => {
                                 filteredRoles.map(role => {
                                     const activeModules = getActiveModules(role.permissions);
                                     const isSystem = Boolean(role.is_system_role);
+                                    const isSuperAdmin = role.role_name === 'super_admin';
 
                                     return (
                                         <tr key={role.id} className="role-table-row">
@@ -438,7 +467,7 @@ const RoleManagement = () => {
                                             {/* Action Buttons */}
                                             <td>
                                                 <div className="actions-cell">
-                                                    <button
+                                                    {canManageRoles && <button
                                                         type="button"
                                                         className="action-btn edit"
                                                         onClick={() => handleOpenModal(role)}
@@ -446,20 +475,20 @@ const RoleManagement = () => {
                                                     >
                                                         <FiEdit2 size={14} />
                                                         <span>Edit</span>
-                                                    </button>
-                                                    <button
+                                                    </button>}
+                                                    {canManageRoles && <button
                                                         type="button"
-                                                        className={`action-btn delete ${isSystem ? 'disabled' : ''}`}
+                                                        className={`action-btn delete ${isSuperAdmin ? 'disabled' : ''}`}
                                                         onClick={() => {
-                                                            if (isSystem) return;
+                                                            if (isSuperAdmin) return;
                                                             handleDelete(role.id, role.display_name);
                                                         }}
-                                                        disabled={isSystem}
-                                                        title={isSystem ? 'System roles cannot be deleted' : 'Delete Role'}
+                                                        disabled={isSuperAdmin}
+                                                        title={isSuperAdmin ? 'Super Administrator role cannot be deleted' : 'Delete Role'}
                                                     >
                                                         <FiTrash2 size={14} />
                                                         <span>Delete</span>
-                                                    </button>
+                                                    </button>}
                                                 </div>
                                             </td>
                                         </tr>
