@@ -1,0 +1,187 @@
+name: Deploy Maintenance App to AWS Lightsail
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'frontend/**'
+      - 'backend/**'
+      - 'nginx/**'
+      - '.github/workflows/**'
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '20'
+  PM2_APP_NAME: maintenance-backend
+
+jobs:
+  build-maintenance-frontend:
+    name: Build Maintenance Frontend (CI)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install & build
+        working-directory: frontend
+        env:
+          VITE_API_URL: /api
+          VITE_MAINTENANCE_APP_URL: https://maintenance.pydah.edu.in
+          VITE_HRMS_PORTAL_URL: https://hrms.pydah.edu.in
+        run: |
+          npm ci
+          npm run build
+          test -f dist/index.html
+
+      - name: Pack dist
+        run: tar -czf maintenance-dist.tar.gz -C frontend dist
+
+      - name: Upload dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: maintenance-dist
+          path: maintenance-dist.tar.gz
+          retention-days: 1
+
+  deploy-maintenance-app:
+    name: Deploy Maintenance App to Lightsail
+    needs: build-maintenance-frontend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download frontend dist
+        uses: actions/download-artifact@v4
+        with:
+          name: maintenance-dist
+
+      - name: Upload dist archive to server
+        uses: appleboy/scp-action@v1.0.0
+        with:
+          host: ${{ secrets.LIGHTSAIL_MAINTENANCE_HOST || secrets.LIGHTSAIL_HOST || secrets.SERVER_IP || secrets.HOST }}
+          username: ec2-user
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY || secrets.SSH_PRIVATE_KEY || secrets.SSH_KEY }}
+          source: maintenance-dist.tar.gz
+          target: /tmp/
+
+      - name: Deploy backend + frontend on server
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: ${{ secrets.LIGHTSAIL_MAINTENANCE_HOST || secrets.LIGHTSAIL_HOST || secrets.SERVER_IP || secrets.HOST }}
+          username: ec2-user
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY || secrets.SSH_PRIVATE_KEY || secrets.SSH_KEY }}
+          script_stop: true
+          command_timeout: 15m
+          script: |
+            set -euo pipefail
+
+            # Detect application directory on server
+            if [ -d "/home/ec2-user/Maintanance" ]; then
+              APP="/home/ec2-user/Maintanance"
+            elif [ -d "/home/ec2-user/maintenance" ]; then
+              APP="/home/ec2-user/maintenance"
+            else
+              echo "Error: Maintenance application directory not found in /home/ec2-user"
+              exit 1
+            fi
+
+            PM2_APP="${{ env.PM2_APP_NAME }}"
+
+            echo "==> Pull latest code in $APP"
+            cd "$APP"
+            git fetch origin
+            git reset --hard origin/main
+
+            echo "==> Deploy frontend dist to /var/www/maintanance"
+            sudo mkdir -p /var/www/maintanance
+            sudo rm -rf /tmp/maintenance-dist
+            sudo mkdir -p /tmp/maintenance-dist
+            sudo tar -xzf /tmp/maintenance-dist.tar.gz -C /tmp/maintenance-dist
+            sudo rsync -a --delete /tmp/maintenance-dist/dist/ /var/www/maintanance/
+            sudo rm -rf /tmp/maintenance-dist /tmp/maintenance-dist.tar.gz
+            sudo chmod -R 755 /var/www/maintanance
+
+            # Sync to local dist folder
+            if [ -d "$APP/frontend" ]; then
+              sudo mkdir -p "$APP/frontend/dist"
+              sudo cp -r /var/www/maintanance/* "$APP/frontend/dist/" 2>/dev/null || true
+              sudo chmod -R 755 "$APP/frontend/dist" 2>/dev/null || true
+            fi
+
+            echo "==> Maintenance Backend dependencies install"
+            cd "$APP/backend"
+            npm ci --omit=dev || npm install --production
+
+            echo "==> Database migrations"
+            if [ -f "migrations/migrate.js" ]; then
+              node migrations/migrate.js || true
+            fi
+
+            echo "==> PM2 restart ($PM2_APP)"
+            sleep 2
+            if pm2 describe "$PM2_APP" >/dev/null 2>&1; then
+              pm2 restart ecosystem.config.js --only "$PM2_APP" --update-env || pm2 restart "$PM2_APP" --update-env
+            else
+              pm2 start ecosystem.config.js --only "$PM2_APP" --update-env || pm2 start server.js --name "$PM2_APP" --update-env
+            fi
+            pm2 save
+
+            if [ -f "$APP/nginx/maintenance.conf" ]; then
+              echo "==> Updating Nginx config from nginx/maintenance.conf"
+              sudo cp "$APP/nginx/maintenance.conf" /etc/nginx/conf.d/maintenance.conf
+            fi
+
+            echo "==> Nginx test and reload"
+            sudo nginx -t
+            sudo systemctl reload nginx
+
+            echo "==> Health check (wait until Node backend is listening on :5001)"
+            HEALTH_OK=0
+            for i in $(seq 1 30); do
+              if curl -fsS --max-time 5 http://127.0.0.1:5001/health >/dev/null 2>&1; then
+                HEALTH_OK=1
+                echo "Maintenance backend healthy on attempt $i"
+                break
+              fi
+              echo "Health attempt $i/30 — waiting for backend on port 5001..."
+              sleep 2
+            done
+
+            if [ "$HEALTH_OK" != "1" ]; then
+              echo "Maintenance backend did not become healthy on 127.0.0.1:5001"
+              pm2 list || true
+              pm2 describe "$PM2_APP" || true
+              pm2 logs "$PM2_APP" --lines 80 --nostream || true
+              ss -lntp | grep -E '5001|node' || true
+              exit 1
+            fi
+
+            curl -fsS http://127.0.0.1:5001/health || true
+            echo
+            pm2 list
+
+      - name: Verify deployment
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: ${{ secrets.LIGHTSAIL_MAINTENANCE_HOST || secrets.LIGHTSAIL_HOST || secrets.SERVER_IP || secrets.HOST }}
+          username: ec2-user
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY || secrets.SSH_PRIVATE_KEY || secrets.SSH_KEY }}
+          script: |
+            set -e
+            PM2_APP="${{ env.PM2_APP_NAME }}"
+            if ! pm2 list | grep -q "$PM2_APP.*online"; then
+              echo "Maintenance backend not online"
+              pm2 logs "$PM2_APP" --lines 80 --nostream
+              exit 1
+            fi
+            curl -fsS --max-time 5 http://127.0.0.1:5001/health >/dev/null 2>&1
+            echo "Maintenance App deployment verified successfully"
