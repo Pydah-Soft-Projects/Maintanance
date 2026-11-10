@@ -32,11 +32,6 @@
     transition: all 0.15s;
 }
 
-.matrix-quick-btn:hover {
-    background: #f1f5f9;
-    border-color: #cbd5e1;
-}
-
 .permission-modules-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
@@ -51,11 +46,6 @@
     transition: all 0.2s ease;
     display: flex;
     flex-direction: column;
-}
-
-.permission-module-card:hover {
-    border-color: #cbd5e1;
-    box-shadow: 0 4px 12px -2px rgba(15, 23, 42, 0.06);
 }
 
 .permission-module-card.has-access {
@@ -108,7 +98,7 @@
 .module-card-toggle-btn {
     font-size: 0.6875rem;
     font-weight: 600;
-    color: #64748b;
+    color: #000000;
     background: transparent;
     border: none;
     cursor: pointer;
@@ -116,11 +106,6 @@
     border-radius: 4px;
     transition: all 0.15s;
     flex-shrink: 0;
-}
-
-.module-card-toggle-btn:hover {
-    background: #e2e8f0;
-    color: #0f172a;
 }
 
 .module-permissions {
@@ -137,10 +122,6 @@
     padding: 0.4rem 0.5rem;
     border-radius: 6px;
     transition: background-color 0.15s ease;
-}
-
-.permission-checkbox:hover {
-    background-color: #f8fafc;
 }
 
 .permission-checkbox.checked {
@@ -166,7 +147,7 @@
     align-items: center;
     gap: 0.5rem;
     font-size: 0.8125rem;
-    color: #475569;
+    color: #000000;
     user-select: none;
     min-width: 0;
     flex: 1;
@@ -179,7 +160,7 @@
     padding: 0.125rem 0.45rem;
     border-radius: 4px;
     background: #f1f5f9;
-    color: #64748b;
+    color: #000000;
     flex-shrink: 0;
 }
 
@@ -205,7 +186,7 @@
 
 .permission-desc-text {
     font-size: 0.75rem;
-    color: #64748b;
+    color: #000000;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;

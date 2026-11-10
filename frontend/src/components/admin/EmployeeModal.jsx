@@ -366,7 +366,7 @@ const EmployeeModal = ({
                                                             {emp.name || emp.employee_name}
                                                         </span>
                                                         {isAlreadyAdded && (
-                                                            <span style={{ fontSize: '0.6875rem', fontWeight: 700, padding: '0.125rem 0.375rem', borderRadius: '0.25rem', backgroundColor: '#e2e8f0', color: '#475569' }}>
+                                                            <span style={{ fontSize: '0.6875rem', fontWeight: 700, padding: '0.125rem 0.375rem', borderRadius: '0.25rem', backgroundColor: '#e2e8f0', color: '#000000' }}>
                                                                 Already Added
                                                             </span>
                                                         )}

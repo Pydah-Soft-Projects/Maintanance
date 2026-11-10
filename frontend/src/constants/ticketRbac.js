@@ -23,12 +23,12 @@ export const TICKET_MODULE_PERMISSIONS = {
     [TICKET_MODULES.TICKET_MANAGEMENT]: {
         permissions: ['read', 'pending', 'assigned', 'resolved', 'student', 'faculty', 'write', 'update', 'delete'],
         labels: {
-            read: 'Open Task Management',
+            read: 'Open Complaints',
             pending: 'View Pending tab',
             assigned: 'View Assigned / In Progress tab',
             resolved: 'View Resolved tab',
-            student: 'View Student requests',
-            faculty: 'View Faculty requests',
+            student: 'View Student complaints',
+            faculty: 'View Faculty complaints',
             write: 'Create Tickets',
             update: 'Update Tickets (Status, Assignments)',
             delete: 'Delete Tickets'
@@ -59,7 +59,7 @@ export const TICKET_MODULE_PERMISSIONS = {
 // Module Labels for UI
 export const TICKET_MODULE_LABELS = {
     [TICKET_MODULES.DASHBOARD]: 'Dashboard',
-    [TICKET_MODULES.TICKET_MANAGEMENT]: 'Task Management',
+    [TICKET_MODULES.TICKET_MANAGEMENT]: 'Complaints',
     [TICKET_MODULES.EMPLOYEE_MANAGEMENT]: 'User Management',
     [TICKET_MODULES.CATEGORY_MANAGEMENT]: 'Configuration'
 };

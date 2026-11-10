@@ -29,7 +29,7 @@ const EXCLUDED_EXTERNAL_ROLES = new Set([
 
 const MODULE_CONFIG = {
     ticket_dashboard: { label: 'Dashboard', chipClass: 'chip-blue' },
-    ticket_management: { label: 'Task Management', chipClass: 'chip-emerald' },
+    ticket_management: { label: 'Complaints', chipClass: 'chip-emerald' },
     category_management: { label: 'Configuration', chipClass: 'chip-amber' },
     employee_management: { label: 'User Management', chipClass: 'chip-purple' }
 };
@@ -278,6 +278,19 @@ const RoleManagement = () => {
                 </div>
             )}
 
+            {canManageRoles && (
+                <div className="role-management-actions">
+                    <button
+                        type="button"
+                        className="btn-primary shrink-0"
+                        onClick={() => handleOpenModal()}
+                    >
+                        <FiPlus size={16} />
+                        <span>Create Role</span>
+                    </button>
+                </div>
+            )}
+
             {/* Quick Metrics Header */}
             <div className="role-stats-grid">
                 <div className="stat-card-compact">
@@ -370,14 +383,6 @@ const RoleManagement = () => {
                         </button>
                     </div>
 
-                    {canManageRoles && <button
-                        type="button"
-                        className="btn-primary shrink-0"
-                        onClick={() => handleOpenModal()}
-                    >
-                        <FiPlus size={16} />
-                        <span>Create Role</span>
-                    </button>}
                 </div>
 
                 {/* Mobile Scroll Affordance */}

@@ -1,15 +1,11 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-    Users,
     UserPlus,
     Trash2,
     Edit,
     Search,
-    Phone,
-    Mail,
     TrendingUp,
-    AtSign
 } from 'lucide-react';
 import api from '../../config/api';
 import toast from 'react-hot-toast';
@@ -157,24 +153,17 @@ const EmployeeManagement = () => {
 
     return (
         <div className="admin-page-container">
-            <div className="card-base" style={{ padding: 0 }}>
-                {/* Users Header & Action Bar */}
-                <div className="admin-tabs-container flex justify-between items-center px-6 py-4 border-b border-gray-100 flex-wrap gap-3">
-                    <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
-                            <Users size={18} />
-                        </div>
-                        <div>
-                            <h2 className="text-base font-bold text-gray-900 leading-tight">All Users</h2>
-                            <p className="text-xs text-gray-500">{filteredEmployees.length} ticket {filteredEmployees.length === 1 ? 'user' : 'users'} provisioned from HRMS</p>
-                        </div>
-                    </div>
-                    <button onClick={() => openModal()} className="btn-primary py-2 px-3 text-xs shrink-0 flex items-center gap-1.5" type="button">
+            <div className="user-management-actions">
+                <span className="user-management-count">
+                    {filteredEmployees.length} {filteredEmployees.length === 1 ? 'user' : 'users'} provisioned from HRMS
+                </span>
+                <button onClick={() => openModal()} className="btn-primary py-2 px-3 text-xs shrink-0 flex items-center gap-1.5" type="button">
                         <UserPlus size={16} />
                         <span>Create User</span>
-                    </button>
-                </div>
+                </button>
+            </div>
 
+            <div className="card-base user-management-table-card" style={{ padding: 0 }}>
                 {/* Search Filter */}
                 <div className="admin-filters-section">
                     <div className="input-group-wrapper" style={{ maxWidth: '100%' }}>
@@ -188,84 +177,79 @@ const EmployeeManagement = () => {
                     </div>
                 </div>
 
-                {/* User Cards Grid */}
-                <div className="card-body">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {filteredEmployees.length > 0 ? (
-                            filteredEmployees.map(employee => (
-                                <div key={employee.id} className="admin-list-item relative overflow-hidden group hover:border-blue-200 transition-all">
-                                    <div className={`absolute top-0 left-0 w-1 h-full ${employee.role === 'staff' || employee.role === 'manager' ? 'bg-blue-500' : employee.role === 'worker' ? 'bg-amber-500' : 'bg-purple-500'}`} />
-                                    <div className="flex justify-between items-start mb-4">
-                                        <div className="flex items-center gap-3">
-                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-lg ${employee.role === 'staff' || employee.role === 'manager' ? 'bg-blue-500' : employee.role === 'worker' ? 'bg-amber-500' : 'bg-purple-500'}`}>
-                                                {(employee.name || 'U').charAt(0).toUpperCase()}
-                                            </div>
-                                            <div>
-                                                <h3 className="font-bold text-gray-900 line-clamp-1">{employee.name}</h3>
-                                                <p className="text-xs text-gray-500 uppercase font-semibold tracking-wider">
-                                                    {employee.role_display_name || employee.role}
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <div className="flex gap-1">
+                <div className="user-table-scroll">
+                    <table className="admin-table user-management-table">
+                        <thead>
+                            <tr>
+                                <th>User</th>
+                                <th>Employee ID</th>
+                                <th>Email</th>
+                                <th>Phone</th>
+                                <th>Role</th>
+                                <th className="user-table-actions-heading">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {filteredEmployees.length ? filteredEmployees.map((employee) => (
+                                <tr key={employee.id}>
+                                    <td>
+                                        <span className="user-table-name">{employee.name || 'Unnamed user'}</span>
+                                    </td>
+                                    <td>{employee.username || '—'}</td>
+                                    <td className="user-table-email">{employee.email || '—'}</td>
+                                    <td>{employee.phone || '—'}</td>
+                                    <td>{employee.role_display_name || employee.role || '—'}</td>
+                                    <td>
+                                        <div className="user-table-actions">
                                             <button
                                                 type="button"
                                                 onClick={() => setViewingHistoryUser(employee)}
-                                                className="p-1.5 text-teal-600 hover:bg-teal-50 rounded transition-colors"
-                                                title="View Track"
+                                                className="user-table-action history"
+                                                title="View history"
+                                                aria-label={`View history for ${employee.name}`}
                                             >
                                                 <TrendingUp size={16} />
                                             </button>
                                             <button
                                                 type="button"
                                                 onClick={() => openModal(employee)}
-                                                className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                                                title="Edit"
+                                                className="user-table-action edit"
+                                                title="Edit user"
+                                                aria-label={`Edit ${employee.name}`}
                                             >
                                                 <Edit size={16} />
                                             </button>
                                             <button
                                                 type="button"
-                                                onClick={() => { if (window.confirm(`Remove user "${employee.name}" from ticket system?`)) deleteMutation.mutate(employee.id); }}
-                                                className="p-1.5 text-red-500 hover:bg-red-50 rounded transition-colors"
-                                                title="Remove"
+                                                onClick={() => {
+                                                    if (window.confirm(`Remove user "${employee.name}" from ticket system?`)) {
+                                                        deleteMutation.mutate(employee.id);
+                                                    }
+                                                }}
+                                                className="user-table-action delete"
+                                                title="Remove user"
+                                                aria-label={`Remove ${employee.name}`}
                                             >
                                                 <Trash2 size={16} />
                                             </button>
                                         </div>
-                                    </div>
-                                    <div className="space-y-2 text-sm text-gray-600">
-                                        {employee.username && (
-                                            <div className="flex items-center gap-2">
-                                                <AtSign size={14} className="text-gray-400 shrink-0" />
-                                                <span className="font-mono text-xs text-gray-700 font-medium">ID: {employee.username}</span>
-                                            </div>
-                                        )}
-                                        <div className="flex items-center gap-2">
-                                            <Mail size={14} className="text-gray-400 shrink-0" />
-                                            <span className="truncate">{employee.email || 'No email provided'}</span>
+                                    </td>
+                                </tr>
+                            )) : (
+                                <tr>
+                                    <td colSpan="6">
+                                        <div className="empty-state">
+                                            <div className="empty-state-icon"><Search size={32} /></div>
+                                            <p className="empty-state-text">No users found matching your search.</p>
+                                            <button onClick={() => setSearchTerm('')} className="empty-state-action" type="button">
+                                                Clear search
+                                            </button>
                                         </div>
-                                        <div className="flex items-center gap-2">
-                                            <Phone size={14} className="text-gray-400 shrink-0" />
-                                            <span>{employee.phone || 'N/A'}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            ))
-                        ) : (
-                            <div className="col-span-full">
-                                <div className="empty-state">
-                                    <div className="empty-state-icon">
-                                        <Search size={32} />
-                                    </div>
-                                    <p className="empty-state-text">No users found matching your search.</p>
-                                    <button onClick={() => setSearchTerm('')} className="empty-state-action" type="button">
-                                        Clear search
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-                    </div>
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
                 </div>
             </div>
 

@@ -271,7 +271,7 @@ const MyTickets = () => {
                                     className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition-all whitespace-nowrap cursor-pointer ${
                                         isActive
                                             ? 'bg-sky-50 text-sky-700 border border-sky-200/80 shadow-2xs'
-                                            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 border border-transparent'
+                                            : 'text-slate-600   border border-transparent'
                                     }`}
                                 >
                                     <Icon size={15} className={isActive ? 'text-sky-600' : 'text-slate-400'} />
@@ -293,7 +293,7 @@ const MyTickets = () => {
                     {/* Primary Raise Ticket Button */}
                     <Link
                         to="/student/raise-ticket"
-                        className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white font-semibold text-xs sm:text-sm shadow-xs hover:shadow transition-all whitespace-nowrap shrink-0 cursor-pointer self-start sm:self-auto"
+                        className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600   text-white font-semibold text-xs sm:text-sm shadow-xs  transition-all whitespace-nowrap shrink-0 cursor-pointer self-start sm:self-auto"
                     >
                         <Plus size={16} />
                         <span>Raise Ticket</span>
@@ -311,13 +311,13 @@ const MyTickets = () => {
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 placeholder="Search tickets, IDs, rooms..."
-                                className="w-full pl-9 pr-8 py-1.5 text-xs sm:text-sm bg-slate-50 hover:bg-white focus:bg-white border border-slate-200 focus:border-sky-500 rounded-xl outline-none text-slate-800 placeholder-slate-400 transition-colors"
+                                className="w-full pl-9 pr-8 py-1.5 text-xs sm:text-sm bg-slate-50  focus:bg-white border border-slate-200 focus:border-sky-500 rounded-xl outline-none text-slate-800 placeholder-slate-400 transition-colors"
                             />
                             {searchQuery && (
                                 <button
                                     type="button"
                                     onClick={() => setSearchQuery('')}
-                                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400  cursor-pointer"
                                 >
                                     <X size={14} />
                                 </button>
@@ -330,7 +330,7 @@ const MyTickets = () => {
                                 <select
                                     value={selectedCategory}
                                     onChange={(e) => setSelectedCategory(e.target.value)}
-                                    className="pl-3 pr-8 py-1.5 text-xs sm:text-sm bg-slate-50 hover:bg-white focus:bg-white border border-slate-200 focus:border-sky-500 rounded-xl outline-none text-slate-700 font-medium transition-colors cursor-pointer appearance-none"
+                                    className="pl-3 pr-8 py-1.5 text-xs sm:text-sm bg-slate-50  focus:bg-white border border-slate-200 focus:border-sky-500 rounded-xl outline-none text-slate-700 font-medium transition-colors cursor-pointer appearance-none"
                                 >
                                     <option value="all">All Categories</option>
                                     {categories.map((cat) => (
@@ -352,7 +352,7 @@ const MyTickets = () => {
                                 className={`p-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                                     viewMode === 'cards'
                                         ? 'bg-white text-sky-700 shadow-2xs'
-                                        : 'text-slate-500 hover:text-slate-800'
+                                        : 'text-slate-500 '
                                 }`}
                             >
                                 <LayoutGrid size={15} />
@@ -364,7 +364,7 @@ const MyTickets = () => {
                                 className={`p-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                                     viewMode === 'table'
                                         ? 'bg-white text-sky-700 shadow-2xs'
-                                        : 'text-slate-500 hover:text-slate-800'
+                                        : 'text-slate-500 '
                                 }`}
                             >
                                 <List size={15} />
@@ -376,7 +376,7 @@ const MyTickets = () => {
                             onClick={() => refetch()}
                             disabled={isFetching}
                             title="Refresh tickets"
-                            className="p-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-900 transition-colors shadow-2xs shrink-0 cursor-pointer"
+                            className="p-1.5 rounded-xl border border-slate-200 bg-white  text-slate-600  transition-colors shadow-2xs shrink-0 cursor-pointer"
                         >
                             <RefreshCw size={15} className={isFetching ? 'animate-spin text-sky-600' : ''} />
                         </button>
@@ -411,14 +411,14 @@ const MyTickets = () => {
                                     setSearchQuery('');
                                     setSelectedCategory('all');
                                 }}
-                                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer"
+                                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-slate-100  transition-colors cursor-pointer"
                             >
                                 <RefreshCw size={14} /> Clear Filters
                             </button>
                         ) : (
                             <Link
                                 to="/student/raise-ticket"
-                                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 text-white font-semibold text-sm shadow-sm hover:shadow transition-all"
+                                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 text-white font-semibold text-sm shadow-sm  transition-all"
                             >
                                 <Plus size={18} />
                                 <span>Create a Ticket</span>
@@ -454,14 +454,14 @@ const MyTickets = () => {
                                         return (
                                             <tr
                                                 key={t.id}
-                                                className="hover:bg-slate-50/80 transition-colors group cursor-pointer"
+                                                className=" transition-colors group cursor-pointer"
                                                 onClick={() => setSelectedTicket(t)}
                                             >
                                                 <td className="py-3 px-4 font-mono font-semibold text-slate-800 whitespace-nowrap">
                                                     #{t.ticket_number || t.id}
                                                 </td>
                                                 <td className="py-3 px-4 max-w-md">
-                                                    <div className="font-semibold text-slate-900 group-hover:text-sky-600 transition-colors line-clamp-1">
+                                                    <div className="font-semibold text-slate-900  transition-colors line-clamp-1">
                                                         {t.title}
                                                     </div>
                                                     <div className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5">
@@ -508,7 +508,7 @@ const MyTickets = () => {
                                                         <button
                                                             type="button"
                                                             onClick={() => setSelectedTicket(t)}
-                                                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer"
+                                                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 bg-slate-100  transition-colors cursor-pointer"
                                                         >
                                                             <Eye size={13} />
                                                             <span>Details</span>
@@ -520,7 +520,7 @@ const MyTickets = () => {
                                                                     setSelectedTicket(t);
                                                                     setShowFeedbackModal(true);
                                                                 }}
-                                                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors shadow-2xs cursor-pointer"
+                                                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-white bg-emerald-600  transition-colors shadow-2xs cursor-pointer"
                                                             >
                                                                 <Star size={13} />
                                                                 <span>Rate</span>
@@ -555,7 +555,7 @@ const MyTickets = () => {
                                     initial={{ opacity: 0, y: 10 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ delay: index * 0.025 }}
-                                    className={`group bg-white hover:bg-slate-50/30 rounded-2xl border border-slate-200/80 hover:border-sky-300 border-t-4 ${statusInfo.borderTopAccent || 'border-t-sky-500'} shadow-xs hover:shadow-md transition-all duration-200 flex flex-col justify-between overflow-hidden text-left`}
+                                    className={`group bg-white  rounded-2xl border border-slate-200/80  border-t-4 ${statusInfo.borderTopAccent || 'border-t-sky-500'} shadow-xs  transition-all duration-200 flex flex-col justify-between overflow-hidden text-left`}
                                 >
                                     {/* Card Main Body */}
                                     <div className="p-4 sm:p-5 flex-1 flex flex-col space-y-3">
@@ -595,7 +595,7 @@ const MyTickets = () => {
                                         <div className="space-y-1 pt-0.5 flex-1">
                                             <h3
                                                 onClick={() => setSelectedTicket(t)}
-                                                className="text-base font-bold text-slate-900 group-hover:text-sky-600 transition-colors cursor-pointer line-clamp-2 leading-snug"
+                                                className="text-base font-bold text-slate-900  transition-colors cursor-pointer line-clamp-2 leading-snug"
                                                 title={t.title}
                                             >
                                                 {t.title}
@@ -648,7 +648,7 @@ const MyTickets = () => {
                                         <button
                                             type="button"
                                             onClick={() => setSelectedTicket(t)}
-                                            className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-200/80 transition-all cursor-pointer shadow-2xs"
+                                            className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-semibold text-slate-700 bg-white  border border-slate-200/80 transition-all cursor-pointer shadow-2xs"
                                         >
                                             <Eye size={13} />
                                             <span>Details</span>
@@ -662,7 +662,7 @@ const MyTickets = () => {
                                                     setSelectedTicket(t);
                                                     setShowFeedbackModal(true);
                                                 }}
-                                                className="inline-flex items-center gap-1 py-2 px-3 rounded-xl text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors shadow-2xs cursor-pointer whitespace-nowrap"
+                                                className="inline-flex items-center gap-1 py-2 px-3 rounded-xl text-xs font-semibold text-white bg-emerald-600  transition-colors shadow-2xs cursor-pointer whitespace-nowrap"
                                             >
                                                 <Star size={13} />
                                                 <span>Rate</span>
@@ -797,7 +797,7 @@ const TicketDetailsModal = ({ ticket, onClose, onFeedback, onReopen }) => {
                     </div>
                     <button
                         onClick={onClose}
-                        className="p-1.5 rounded-xl hover:bg-slate-200/60 text-slate-400 hover:text-slate-600 transition-colors"
+                        className="p-1.5 rounded-xl  text-slate-400  transition-colors"
                     >
                         <X size={20} />
                     </button>
@@ -907,7 +907,7 @@ const TicketDetailsModal = ({ ticket, onClose, onFeedback, onReopen }) => {
                                 <img
                                     src={resolveTicketPhotoUrl(ticket.photo_url)}
                                     alt="Evidence"
-                                    className="w-full h-56 object-cover hover:scale-105 transition-transform duration-300 cursor-pointer"
+                                    className="w-full h-56 object-cover  transition-transform duration-300 cursor-pointer"
                                     onClick={() => window.open(resolveTicketPhotoUrl(ticket.photo_url), '_blank')}
                                 />
                             </div>
@@ -951,13 +951,13 @@ const TicketDetailsModal = ({ ticket, onClose, onFeedback, onReopen }) => {
                             <span className="text-xs font-medium text-slate-600">Satisfied with the fix?</span>
                             <button
                                 onClick={onReopen}
-                                className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-red-200 text-red-600 bg-red-50 hover:bg-red-100 transition-colors"
+                                className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-red-200 text-red-600 bg-red-50  transition-colors"
                             >
                                 Not Satisfied (Reopen)
                             </button>
                             <button
                                 onClick={onFeedback}
-                                className="px-3.5 py-1.5 text-xs font-semibold rounded-lg text-white bg-emerald-600 hover:bg-emerald-700 transition-colors"
+                                className="px-3.5 py-1.5 text-xs font-semibold rounded-lg text-white bg-emerald-600  transition-colors"
                             >
                                 Satisfied (Rate)
                             </button>
@@ -966,7 +966,7 @@ const TicketDetailsModal = ({ ticket, onClose, onFeedback, onReopen }) => {
 
                     <button
                         onClick={onClose}
-                        className="ml-auto px-4 py-2 rounded-xl text-xs font-medium text-slate-700 bg-white border border-slate-200/80 hover:bg-slate-100 transition-colors shadow-xs"
+                        className="ml-auto px-4 py-2 rounded-xl text-xs font-medium text-slate-700 bg-white border border-slate-200/80  transition-colors shadow-xs"
                     >
                         Close
                     </button>
@@ -1004,7 +1004,7 @@ const FeedbackModal = ({ ticket, form, setForm, onClose, onSubmit, loading }) =>
                             key={rating}
                             type="button"
                             onClick={() => setForm({ ...form, rating })}
-                            className="p-1 hover:scale-110 transition-transform"
+                            className="p-1  transition-transform"
                         >
                             <Star
                                 size={32}
@@ -1034,7 +1034,7 @@ const FeedbackModal = ({ ticket, form, setForm, onClose, onSubmit, loading }) =>
                     <button
                         type="button"
                         onClick={onClose}
-                        className="flex-1 py-2.5 rounded-xl border border-slate-200/80 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+                        className="flex-1 py-2.5 rounded-xl border border-slate-200/80 text-xs font-medium text-slate-600  transition-colors"
                     >
                         Cancel
                     </button>
@@ -1042,7 +1042,7 @@ const FeedbackModal = ({ ticket, form, setForm, onClose, onSubmit, loading }) =>
                         type="button"
                         onClick={onSubmit}
                         disabled={loading || !form.rating}
-                        className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-semibold shadow-xs hover:shadow transition-all disabled:opacity-50"
+                        className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600   text-white text-xs font-semibold shadow-xs  transition-all disabled:opacity-50"
                     >
                         {loading ? 'Submitting...' : 'Submit Rating'}
                     </button>

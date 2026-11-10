@@ -21,14 +21,14 @@ const PermissionMatrix = ({
             }
         },
         ticket_management: {
-            label: 'Task Management',
+            label: 'Complaints',
             permissions: {
-                read: 'Open Task Management',
+                read: 'Open Complaints',
                 pending: 'View Pending tab',
                 assigned: 'View Assigned / In Progress tab',
                 resolved: 'View Resolved tab',
-                student: 'View Student requests',
-                faculty: 'View Faculty requests',
+                student: 'View Student complaints',
+                faculty: 'View Faculty complaints',
                 write: 'Create Tickets',
                 update: 'Update Tickets',
                 delete: 'Delete Tickets'

@@ -6,14 +6,17 @@ import {
     Settings,
     Users,
     LogOut,
-    Menu
+    Menu,
+    PanelLeftClose,
+    PanelLeftOpen
 } from 'lucide-react';
 import useAuthStore from '../../store/authStore';
 import toast from 'react-hot-toast';
+import '../../styles/admin-pages.css';
 
 const AdminLayout = () => {
     // State
-    const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true);
+    const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(() => window.innerWidth > 1024);
     const navigate = useNavigate();
     const { user, logout, hasPermission } = useAuthStore();
 
@@ -36,7 +39,7 @@ const AdminLayout = () => {
         {
             id: 'task-management',
             icon: ClipboardList,
-            label: 'Task Management',
+            label: 'Complaints',
             path: '/task-management',
             module: 'ticket_management'
         },
@@ -79,16 +82,15 @@ const AdminLayout = () => {
         },
         sidebar: {
             width: '270px',
-            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+            backgroundColor: '#FFFFFF',
             borderRight: '1px solid #e2e8f0',
             height: '100%',
             position: 'fixed',
             left: 0,
             top: 0,
             zIndex: 40,
-            transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            transition: 'transform 0.25s ease',
             transform: desktopSidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
-            backdropFilter: 'blur(12px)',
             display: 'flex',
             flexDirection: 'column',
         },
@@ -101,43 +103,42 @@ const AdminLayout = () => {
             borderBottom: '1px solid #f1f5f9',
         },
         logoBox: {
-            width: '32px',
-            height: '32px',
-            borderRadius: '8px',
-            background: 'linear-gradient(135deg, #2563EB, #4F46E5)',
+            width: '36px',
+            height: '36px',
+            borderRadius: '11px',
+            background: '#eff6ff',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: 'white',
+            color: '#2563eb',
             fontWeight: 'bold',
-            fontSize: '18px',
-            boxShadow: '0 4px 6px -1px rgba(59, 130, 246, 0.5)',
+            fontSize: '16px',
         },
         logoText: {
-            fontSize: '15px',
-            fontWeight: '600',
+            fontSize: '14px',
+            fontWeight: '700',
             color: '#0f172a',
             marginLeft: '12px',
             fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
-            letterSpacing: '-0.01em',
+            letterSpacing: '-0.02em',
         },
         nav: {
-            padding: '16px 14px',
+            padding: '20px 12px',
             overflowY: 'auto',
             flex: 1,
         },
         navItem: (isActive) => ({
             display: 'flex',
             alignItems: 'center',
-            gap: '12px',
-            padding: '10px 14px',
-            marginBottom: '4px',
-            borderRadius: '12px',
+            gap: '11px',
+            padding: '11px 12px',
+            marginBottom: '3px',
+            borderRadius: '10px',
             fontSize: '13px',
             fontWeight: isActive ? '600' : '500',
+            color: isActive ? '#1d4ed8' : '#1f2937',
+            backgroundColor: isActive ? '#eff6ff' : 'transparent',
             textDecoration: 'none',
-            color: isActive ? '#0369a1' : '#475569',
-            backgroundColor: isActive ? '#f0f9ff' : 'transparent',
             transition: 'all 0.15s ease',
             position: 'relative',
         }),
@@ -145,26 +146,27 @@ const AdminLayout = () => {
             flex: 1,
             height: '100vh',
             overflowY: 'auto',
-            padding: '24px 32px',
+            padding: '28px 36px',
+            paddingLeft: desktopSidebarOpen ? '36px' : '76px',
             paddingBottom: '100px',
             marginLeft: desktopSidebarOpen ? '270px' : '0',
-            transition: 'margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            transition: 'margin-left 0.25s ease',
             width: desktopSidebarOpen ? 'calc(100% - 270px)' : '100%',
             maxWidth: desktopSidebarOpen ? 'calc(100% - 270px)' : '100%',
             boxSizing: 'border-box',
             minWidth: 0,
         },
         toggleButton: {
-            position: 'fixed', top: '24px', left: '24px', zIndex: 50,
-            padding: '8px', borderRadius: '8px', backgroundColor: 'rgba(255,255,255,0.8)',
-            border: '1px solid #e5e7eb', cursor: 'pointer', backdropFilter: 'blur(4px)',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+            position: 'fixed', top: '16px', left: '16px', zIndex: 50,
+            padding: '9px', borderRadius: '10px', backgroundColor: '#ffffff',
+            border: '1px solid #e2e8f0', cursor: 'pointer', color: '#000000',
+            boxShadow: '0 2px 6px rgba(15, 23, 42, 0.06)'
         },
         profileCard: {
             margin: '0 14px 10px 14px',
-            padding: '10px 12px',
+            padding: '11px 12px',
             borderRadius: '12px',
-            background: 'white',
+            background: '#f8fafc',
             border: '1px solid #e2e8f0',
             display: 'flex',
             alignItems: 'center',
@@ -172,8 +174,8 @@ const AdminLayout = () => {
         },
         logoutButton: {
             width: '100%', padding: '9px 12px', borderRadius: '10px',
-            backgroundColor: '#ffffff', color: '#dc2626',
-            border: '1px solid #fee2e2', cursor: 'pointer',
+            backgroundColor: '#ffffff', color: '#1f2937',
+            border: '1px solid #e2e8f0', cursor: 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
             fontSize: '12px', fontWeight: '600',
             transition: 'all 0.15s ease'
@@ -181,15 +183,16 @@ const AdminLayout = () => {
         mobileHeader: {
             display: 'none',
             height: '64px',
-            background: 'linear-gradient(135deg, #2563EB, #4F46E5)',
+            background: '#ffffff',
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: '0 16px',
             position: 'fixed',
             top: 0, left: 0, right: 0,
             zIndex: 45,
-            color: 'white',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+            color: '#0f172a',
+            borderBottom: '1px solid #e2e8f0',
+            boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)'
         },
         mobileBottomBar: {
             position: 'fixed',
@@ -249,16 +252,18 @@ const AdminLayout = () => {
                 }
             `}</style>
 
-            {/* Background Pattern */}
-            <div style={{
-                position: 'fixed',
-                inset: 0,
-                zIndex: 0,
-                pointerEvents: 'none',
-                opacity: 0.4,
-                backgroundImage: `radial-gradient(#CBD5E1 1.5px, transparent 1.5px)`,
-                backgroundSize: '24px 24px'
-            }} />
+            {!desktopSidebarOpen && (
+                <button
+                    type="button"
+                    className="hidden lg:flex"
+                    style={{ ...styles.toggleButton, left: '16px', top: '16px' }}
+                    onClick={() => setDesktopSidebarOpen(true)}
+                    aria-label="Open sidebar"
+                    title="Open sidebar"
+                >
+                    <PanelLeftOpen size={20} />
+                </button>
+            )}
 
             {/* Mobile Sidebar Backdrop */}
             {desktopSidebarOpen && (
@@ -269,39 +274,46 @@ const AdminLayout = () => {
                 />
             )}
 
-            {/* Mobile Header (Blue Theme) */}
+            {/* Mobile Header */}
             <header style={styles.mobileHeader} className="mobile-header">
                 <button
+                    type="button"
                     onClick={() => setDesktopSidebarOpen(true)}
-                    className="p-2 -ml-2 text-white/90 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                    aria-label="Open admin navigation"
+                    className="p-2 -ml-2 text-slate-600  rounded-lg transition-colors"
                 >
                     <Menu size={24} />
                 </button>
 
                 <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center backdrop-blur-sm">
-                        <span className="font-bold text-white">A</span>
+                    <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
+                        <span className="font-bold text-blue-700">A</span>
                     </div>
-                    <span className="font-bold text-lg tracking-wide text-white">Admin Portal</span>
+                    <span className="font-semibold text-base tracking-tight text-slate-900">Admin Portal</span>
                 </div>
 
                 <div
-                    className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center overflow-hidden border-2 border-white/20"
+                    className="w-9 h-9 rounded-full bg-blue-50 flex items-center justify-center overflow-hidden border border-blue-100"
                 >
-                    <span className="text-sm font-bold text-white">{user?.username?.charAt(0).toUpperCase() || 'A'}</span>
+                    <span className="text-sm font-bold text-blue-700">{user?.username?.charAt(0).toUpperCase() || 'A'}</span>
                 </div>
             </header>
 
             {/* Sidebar */}
-            <aside style={styles.sidebar} className="desktop-sidebar shadow-xl">
+            <aside style={styles.sidebar} className="desktop-sidebar">
                 <div style={styles.logoArea}>
                     <div style={{ display: 'flex', alignItems: 'center' }}>
                         <div style={styles.logoBox}>T</div>
-                        <span style={styles.logoText}>Ticket Admin</span>
+                        <span style={styles.logoText}>Support Admin</span>
                     </div>
                     {/* Hide sidebar button (Desktop only) */}
-                    <button onClick={() => setDesktopSidebarOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}>
-                        <Menu size={20} />
+                    <button
+                        type="button"
+                        onClick={() => setDesktopSidebarOpen(false)}
+                        aria-label="Close admin navigation"
+                        className="rounded-lg p-2 text-slate-400 transition-colors  "
+                    >
+                        <PanelLeftClose size={20} />
                     </button>
                 </div>
 
@@ -335,7 +347,7 @@ const AdminLayout = () => {
                         <p style={{ fontSize: '13px', fontWeight: '600', color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', margin: 0 }}>
                             {user?.name || user?.username || 'Admin'}
                         </p>
-                        <p style={{ fontSize: '11px', color: '#6B7280', margin: 0 }}>
+                        <p style={{ fontSize: '11px', color: '#000000', margin: 0 }}>
                             {user?.role}
                         </p>
                     </div>
@@ -362,7 +374,7 @@ const AdminLayout = () => {
                         style={({ isActive }) => styles.mobileNavItem(isActive)}
                     >
                         <item.icon size={24} />
-                        <span>{item.label === 'Task Management' ? 'Tickets' : item.label === 'Configuration' ? 'Settings' : item.label}</span>
+                        <span>{item.label === 'Complaints' ? 'Complaints' : item.label === 'Configuration' ? 'Settings' : item.label}</span>
                     </NavLink>
                 ))}
             </div>

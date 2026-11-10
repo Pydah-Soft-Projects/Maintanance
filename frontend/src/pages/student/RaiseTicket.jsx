@@ -225,7 +225,7 @@ const RaiseTicket = () => {
                                     value={formData.category_id}
                                     onChange={(e) => handleCategoryChange(e.target.value)}
                                     required
-                                    className="w-full px-3.5 py-2.5 bg-slate-50/70 hover:bg-white focus:bg-white border border-slate-200 focus:border-sky-500 focus:ring-3 focus:ring-sky-500/10 rounded-xl text-sm font-medium text-slate-800 transition-all outline-none"
+                                    className="w-full px-3.5 py-2.5 bg-slate-50/70  focus:bg-white border border-slate-200 focus:border-sky-500 focus:ring-3 focus:ring-sky-500/10 rounded-xl text-sm font-medium text-slate-800 transition-all outline-none"
                                 >
                                     <option value="">Select a category</option>
                                     {categories.map((category) => (
@@ -250,7 +250,7 @@ const RaiseTicket = () => {
                                     value={formData.sub_category_id}
                                     onChange={(e) => setFormData({ ...formData, sub_category_id: e.target.value })}
                                     disabled={!selectedCategory || !selectedCategory.sub_categories?.length}
-                                    className="w-full px-3.5 py-2.5 bg-slate-50/70 hover:bg-white focus:bg-white border border-slate-200 focus:border-sky-500 focus:ring-3 focus:ring-sky-500/10 rounded-xl text-sm font-medium text-slate-800 transition-all outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="w-full px-3.5 py-2.5 bg-slate-50/70  focus:bg-white border border-slate-200 focus:border-sky-500 focus:ring-3 focus:ring-sky-500/10 rounded-xl text-sm font-medium text-slate-800 transition-all outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     <option value="">
                                         {selectedCategory?.sub_categories?.length ? 'Select a sub-category' : 'No sub-categories available'}
@@ -341,7 +341,7 @@ const RaiseTicket = () => {
                                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                                 required
                                 placeholder="Brief summary of the issue (e.g. Projector not working in Room 204)"
-                                className="w-full px-3.5 py-2.5 bg-slate-50/70 hover:bg-white focus:bg-white border border-slate-200 focus:border-sky-500 focus:ring-3 focus:ring-sky-500/10 rounded-xl text-sm font-medium text-slate-800 placeholder:text-slate-400 transition-all outline-none"
+                                className="w-full px-3.5 py-2.5 bg-slate-50/70  focus:bg-white border border-slate-200 focus:border-sky-500 focus:ring-3 focus:ring-sky-500/10 rounded-xl text-sm font-medium text-slate-800 placeholder:text-slate-400 transition-all outline-none"
                             />
                         </div>
 
@@ -355,7 +355,7 @@ const RaiseTicket = () => {
                                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                                 rows={4}
                                 placeholder="Provide any additional context or specific details to help resolve this quickly..."
-                                className="w-full px-3.5 py-2.5 bg-slate-50/70 hover:bg-white focus:bg-white border border-slate-200 focus:border-sky-500 focus:ring-3 focus:ring-sky-500/10 rounded-xl text-sm font-medium text-slate-800 placeholder:text-slate-400 transition-all outline-none resize-none"
+                                className="w-full px-3.5 py-2.5 bg-slate-50/70  focus:bg-white border border-slate-200 focus:border-sky-500 focus:ring-3 focus:ring-sky-500/10 rounded-xl text-sm font-medium text-slate-800 placeholder:text-slate-400 transition-all outline-none resize-none"
                             />
                         </div>
 
@@ -365,7 +365,7 @@ const RaiseTicket = () => {
                                 Attachment / Photo <span className="text-slate-400 font-normal lowercase">(optional)</span>
                             </label>
                             {!photoPreview ? (
-                                <div className="border-2 border-dashed border-slate-200 hover:border-sky-400 hover:bg-sky-50/40 rounded-xl p-5 text-center cursor-pointer transition-all bg-slate-50/40">
+                                <div className="border-2 border-dashed border-slate-200   rounded-xl p-5 text-center cursor-pointer transition-all bg-slate-50/40">
                                     <input
                                         type="file"
                                         id="photo-upload"
@@ -395,7 +395,7 @@ const RaiseTicket = () => {
                                     <button
                                         type="button"
                                         onClick={removePhoto}
-                                        className="absolute top-3 right-3 p-1.5 bg-slate-900/80 hover:bg-rose-600 text-white rounded-full transition-colors cursor-pointer shadow-sm"
+                                        className="absolute top-3 right-3 p-1.5 bg-slate-900/80  text-white rounded-full transition-colors cursor-pointer shadow-sm"
                                         title="Remove photo"
                                     >
                                         <X size={16} />
@@ -409,7 +409,7 @@ const RaiseTicket = () => {
                             <button
                                 type="submit"
                                 disabled={createMutation.isPending || photoProcessing}
-                                className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 shadow-sm shadow-sky-500/25 hover:shadow-md transition-all active:scale-[0.98] disabled:opacity-60 cursor-pointer"
+                                className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-sky-600 to-indigo-600   shadow-sm shadow-sky-500/25  transition-all active:scale-[0.98] disabled:opacity-60 cursor-pointer"
                             >
                                 {createMutation.isPending || photoProcessing ? (
                                     <>
@@ -427,7 +427,7 @@ const RaiseTicket = () => {
                             <button
                                 type="button"
                                 onClick={() => navigate('/student/my-tickets')}
-                                className="px-4 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                                className="px-4 py-2.5 rounded-xl text-sm font-medium text-slate-600  transition-colors cursor-pointer"
                             >
                                 Cancel
                             </button>

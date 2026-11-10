@@ -84,7 +84,7 @@ const NotificationPrompt = () => {
                         </div>
                         <button
                             onClick={handleDismiss}
-                            className="text-blue-100 hover:text-white p-1 hover:bg-white/10 rounded-full transition-colors"
+                            className="text-blue-100  p-1  rounded-full transition-colors"
                         >
                             <X size={18} />
                         </button>
@@ -92,14 +92,14 @@ const NotificationPrompt = () => {
                     <div className="p-4 bg-white flex gap-3 justify-end">
                         <button
                             onClick={handleDismiss}
-                            className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-colors"
+                            className="px-4 py-2 text-sm font-medium text-gray-600   rounded-lg transition-colors"
                         >
                             Not Now
                         </button>
                         <button
                             onClick={handleAllow}
                             disabled={loading}
-                            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm flex items-center gap-2 transition-all hover:shadow-md disabled:opacity-70 disabled:cursor-not-allowed"
+                            className="px-4 py-2 text-sm font-medium text-white bg-blue-600  rounded-lg shadow-sm flex items-center gap-2 transition-all  disabled:opacity-70 disabled:cursor-not-allowed"
                         >
                             {loading ? 'Enabling...' : (
                                 <>

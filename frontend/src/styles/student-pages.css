@@ -9,8 +9,8 @@
     --sdms-border: #E2E8F0;
     --sdms-border-subtle: #F1F5F9;
     --sdms-text-main: #0F172A;
-    --sdms-text-muted: #64748B;
-    --sdms-text-dim: #94A3B8;
+    --sdms-text-muted: #000000;
+    --sdms-text-dim: #000000;
 
     --sdms-primary: #0284C7;
     --sdms-primary-hover: #0369A1;
@@ -53,7 +53,7 @@
     font-size: 1.5rem;
     line-height: 1.875rem;
     font-weight: 700;
-    color: var(--sdms-text-main);
+    color: #000000;
     letter-spacing: -0.02em;
     font-family: var(--sdms-font) !important;
     margin: 0;
@@ -111,11 +111,6 @@
     padding: 1.125rem 1.25rem;
     box-shadow: var(--sdms-shadow-xs);
     transition: all 0.2s ease;
-}
-
-.stat-card:hover {
-    box-shadow: var(--sdms-shadow-sm);
-    transform: translateY(-1px);
 }
 
 .stat-icon-box {
@@ -202,12 +197,6 @@
     text-decoration: none;
 }
 
-.ticket-item:hover {
-    border-color: var(--sdms-primary-border);
-    box-shadow: var(--sdms-shadow-sm);
-    transform: translateY(-1px);
-}
-
 .ticket-icon-circle {
     height: 2.5rem;
     width: 2.5rem;
@@ -288,21 +277,10 @@
     box-shadow: 0 4px 12px -2px rgba(2, 132, 199, 0.25);
 }
 
-.action-card.primary:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 16px -2px rgba(2, 132, 199, 0.35);
-}
-
 .action-card.secondary {
     background-color: var(--sdms-card-bg);
     border-color: var(--sdms-border);
     box-shadow: var(--sdms-shadow-xs);
-}
-
-.action-card.secondary:hover {
-    border-color: var(--sdms-primary-border);
-    transform: translateY(-2px);
-    box-shadow: var(--sdms-shadow-sm);
 }
 
 /* SDMS Buttons */
@@ -322,12 +300,6 @@
     cursor: pointer;
     box-shadow: 0 2px 4px rgba(2, 132, 199, 0.2);
     transition: all 0.2s ease;
-}
-
-.btn-primary:hover {
-    opacity: 0.95;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 8px rgba(2, 132, 199, 0.25);
 }
 
 .btn-primary:active {
@@ -350,11 +322,6 @@
     cursor: pointer;
     box-shadow: var(--sdms-shadow-xs);
     transition: all 0.2s ease;
-}
-
-.btn-secondary:hover {
-    background-color: #F8FAFC;
-    border-color: #CBD5E1;
 }
 
 /* Form Container & Inputs */
@@ -380,7 +347,7 @@
     display: block;
     font-size: 0.75rem;
     font-weight: 600;
-    color: #475569;
+    color: #000000;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     margin-bottom: 0.375rem;
@@ -405,15 +372,8 @@
 
 .form-input::placeholder,
 .form-textarea::placeholder {
-    color: #94A3B8;
+    color: #000000;
     font-weight: 400;
-}
-
-.form-input:hover,
-.form-select:hover,
-.form-textarea:hover {
-    background-color: #FFFFFF;
-    border-color: #94A3B8;
 }
 
 .form-input:focus,
@@ -459,11 +419,6 @@
     cursor: pointer;
     background-color: #F8FAFC;
     transition: all 0.2s ease;
-}
-
-.photo-upload-box:hover {
-    border-color: var(--sdms-primary);
-    background-color: #F0F9FF;
 }
 
 /* Empty State */

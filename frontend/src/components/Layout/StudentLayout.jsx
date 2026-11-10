@@ -59,7 +59,7 @@ const StudentLayout = () => {
             {/* Desktop Sidebar Toggle Button when collapsed */}
             {!desktopSidebarOpen && (
                 <button
-                    className="hidden lg:flex fixed top-4 left-4 z-50 p-2 bg-white/90 backdrop-blur-md rounded-xl shadow-xs border border-slate-200 text-slate-600 hover:text-slate-900 transition-all hover:scale-105 active:scale-95"
+                    className="hidden lg:flex fixed top-4 left-4 z-50 p-2 bg-white/90 backdrop-blur-md rounded-xl shadow-xs border border-slate-200 text-slate-600  transition-all  active:scale-95"
                     onClick={() => setDesktopSidebarOpen(true)}
                     title="Open Sidebar"
                 >
@@ -83,7 +83,7 @@ const StudentLayout = () => {
                             className="flex items-center gap-3 cursor-pointer group"
                             onClick={() => navigate('/student/dashboard')}
                         >
-                            <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-sky-500 to-indigo-600 shadow-md shadow-sky-200 flex items-center justify-center text-white font-bold text-lg tracking-tight transition-transform duration-200 group-hover:scale-105">
+                            <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-sky-500 to-indigo-600 shadow-md shadow-sky-200 flex items-center justify-center text-white font-bold text-lg tracking-tight transition-transform duration-200 ">
                                 T
                             </div>
                             <div className="flex flex-col">
@@ -91,13 +91,13 @@ const StudentLayout = () => {
                                     Ticket Support
                                 </span>
                                 <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
-                                    Pydah Group
+                                    Support Portal
                                 </span>
                             </div>
                         </div>
                         <button
                             onClick={() => setDesktopSidebarOpen(false)}
-                            className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100/80 rounded-lg transition-all"
+                            className="p-1.5 text-slate-400   rounded-lg transition-all"
                             title="Collapse Sidebar"
                         >
                             <RiMenuLine size={18} />
@@ -114,7 +114,7 @@ const StudentLayout = () => {
                                     relative flex items-center gap-3 px-3.5 py-3 rounded-xl text-[13px] transition-all duration-200 group
                                     ${isActive
                                         ? 'bg-sky-50 text-sky-700 font-semibold border border-sky-200/80 shadow-xs'
-                                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium'}
+                                        : 'text-slate-600   font-medium'}
                                 `}
                             >
                                 {({ isActive }) => {
@@ -126,7 +126,7 @@ const StudentLayout = () => {
                                             )}
                                             <Icon
                                                 size={19}
-                                                className={`transition-colors ${isActive ? 'text-sky-600' : 'text-slate-400 group-hover:text-slate-600'}`}
+                                                className={`transition-colors ${isActive ? 'text-sky-600' : 'text-slate-400 '}`}
                                             />
                                             <span className="tracking-tight">{item.label}</span>
                                             {isActive && (
@@ -153,7 +153,7 @@ const StudentLayout = () => {
                     </nav>
 
                     {/* User Profile Card */}
-                    <div className="mx-3.5 mb-3 p-3 rounded-2xl border border-slate-200/80 bg-white shadow-xs hover:shadow-sm transition-all flex items-center gap-3">
+                    <div className="mx-3.5 mb-3 p-3 rounded-2xl border border-slate-200/80 bg-white shadow-xs  transition-all flex items-center gap-3">
                         <div className="relative shrink-0">
                             <div className="h-10 w-10 rounded-full ring-2 ring-white shadow-xs bg-gradient-to-br from-sky-500 to-indigo-600 text-white flex items-center justify-center font-bold text-sm overflow-hidden">
                                 {user?.student_photo ? (
@@ -178,7 +178,7 @@ const StudentLayout = () => {
                     <div className="p-3 border-t border-slate-100 bg-slate-50/50">
                         <button
                             onClick={handleLogout}
-                            className="flex items-center justify-center gap-2 px-3 py-2 w-full rounded-xl text-xs font-semibold text-slate-700 bg-white hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 border border-slate-200 shadow-2xs transition-all active:scale-[0.98] cursor-pointer"
+                            className="flex items-center justify-center gap-2 px-3 py-2 w-full rounded-xl text-xs font-semibold text-slate-700 bg-white    border border-slate-200 shadow-2xs transition-all active:scale-[0.98] cursor-pointer"
                         >
                             <RiLogoutBoxRLine size={15} />
                             <span>Sign Out</span>
@@ -212,7 +212,7 @@ const StudentLayout = () => {
                         to={item.path}
                         className={({ isActive }) => `
                             flex flex-col items-center justify-center gap-1 py-1 px-3 rounded-lg text-xs font-semibold transition-all
-                            ${isActive ? 'text-sky-600' : 'text-slate-400 hover:text-slate-600'}
+                            ${isActive ? 'text-sky-600' : 'text-slate-400 '}
                         `}
                     >
                         <item.icon size={20} />

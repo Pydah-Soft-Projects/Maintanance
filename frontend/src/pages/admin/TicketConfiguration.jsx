@@ -8,22 +8,19 @@ import {
     Trash2,
     X,
     Save,
-    ChevronDown,
-    ChevronRight,
-    List,
-    CheckCircle2,
-    XCircle
+    List
 } from 'lucide-react';
 import api from '../../config/api';
 import toast from 'react-hot-toast';
 import '../../styles/admin-pages.css';
 
-const ToggleSwitch = ({ checked, onChange, label }) => (
+const ToggleSwitch = ({ checked, onChange, label, ariaLabel }) => (
     <div className="flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
         <button
             type="button"
             role="switch"
             aria-checked={checked}
+            aria-label={ariaLabel || label || 'Toggle status'}
             onClick={() => onChange(!checked)}
             className={`
                 relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent 
@@ -50,14 +47,13 @@ const ToggleSwitch = ({ checked, onChange, label }) => (
 );
 
 const TicketConfiguration = () => {
-    const [expandedHeaders, setExpandedHeaders] = useState(new Set());
     const [editingHeader, setEditingHeader] = useState(null);
     const [showAddModal, setShowAddModal] = useState(false);
+    const [selectedCategoryId, setSelectedCategoryId] = useState(null);
     const [formData, setFormData] = useState({
         name: '',
         description: '',
         parent_id: null,
-        display_order: 0,
         is_active: true
     });
     const queryClient = useQueryClient();
@@ -77,10 +73,13 @@ const TicketConfiguration = () => {
             const response = await api.post('/complaint-categories', data);
             return response.data;
         },
-        onSuccess: () => {
+        onSuccess: (_, createdCategory) => {
             toast.success('Successfully created');
             setShowAddModal(false);
-            setFormData({ name: '', description: '', parent_id: null, display_order: 0, is_active: true });
+            setFormData({ name: '', description: '', parent_id: null, is_active: true });
+            if (createdCategory.parent_id != null) {
+                setSelectedCategoryId(createdCategory.parent_id);
+            }
             queryClient.invalidateQueries(['complaint-categories']);
         },
         onError: (err) => toast.error(err.response?.data?.message || 'Failed to create')
@@ -94,6 +93,7 @@ const TicketConfiguration = () => {
         onSuccess: () => {
             toast.success('Successfully updated');
             setEditingHeader(null);
+            setShowAddModal(false);
             queryClient.invalidateQueries(['complaint-categories']);
         },
         onError: (err) => toast.error(err.response?.data?.message || 'Failed to update')
@@ -101,36 +101,48 @@ const TicketConfiguration = () => {
 
     const deleteMutation = useMutation({
         mutationFn: async (id) => {
-            const response = await api.delete(`/ complaint - categories / ${id} `);
+            const response = await api.delete(`/complaint-categories/${id}`);
             return response.data;
         },
-        onSuccess: () => {
+        onSuccess: (_, id) => {
             toast.success('Successfully deleted');
+            if (selectedCategoryId === id) setSelectedCategoryId(null);
             queryClient.invalidateQueries(['complaint-categories']);
         },
         onError: (err) => toast.error(err.response?.data?.message || 'Failed to delete')
     });
 
     // Handlers
-    const toggleHeader = (id) => {
-        setExpandedHeaders(prev => {
-            const newSet = new Set(prev);
-            if (newSet.has(id)) newSet.delete(id); else newSet.add(id);
-            return newSet;
-        });
-    };
-
-    const handleCreate = () => {
+    const handleSave = () => {
         if (!formData.name.trim()) return toast.error('Name is required');
-        createMutation.mutate(formData);
+        if (editingHeader) {
+            updateMutation.mutate({ id: editingHeader.id, data: formData });
+        } else {
+            createMutation.mutate(formData);
+        }
     };
 
-    const handleDelete = (header) => {
-        if (window.confirm(`Delete "${header.name}" ? `)) deleteMutation.mutate(header.id);
+    const handleDelete = (category) => {
+        if (window.confirm(`Delete "${category.name}"?`)) {
+            deleteMutation.mutate(category.id);
+        }
     };
 
     const openAddModal = (parentId = null) => {
-        setFormData({ name: '', description: '', parent_id: parentId, display_order: 0, is_active: true });
+        if (parentId != null) setSelectedCategoryId(null);
+        setEditingHeader(null);
+        setFormData({ name: '', description: '', parent_id: parentId, is_active: true });
+        setShowAddModal(true);
+    };
+
+    const openEditModal = (category) => {
+        setEditingHeader(category);
+        setFormData({
+            name: category.name || '',
+            description: category.description || '',
+            parent_id: category.parent_id ?? null,
+            is_active: Boolean(category.is_active)
+        });
         setShowAddModal(true);
     };
 
@@ -174,6 +186,11 @@ const TicketConfiguration = () => {
 
     return (
         <div className="admin-page-container">
+            <header className="page-header">
+                <h1 className="page-title">Configuration</h1>
+                <p className="page-subtitle">Manage the categories and options used in support requests.</p>
+            </header>
+
             <div className="card-base" style={{ padding: 0 }}>
                 <div className="card-header flex justify-between items-center gap-4 flex-wrap">
                     <div>
@@ -196,20 +213,19 @@ const TicketConfiguration = () => {
                             </button>
                         </div>
                     ) : (
-                        headers.map((header) => (
+                        <div className="configuration-category-grid">
+                        {headers.map((header) => (
                             <HeaderItem
                                 key={header.id}
                                 header={header}
-                                expanded={expandedHeaders.has(header.id)}
-                                onToggle={() => toggleHeader(header.id)}
-                                onAddSub={() => openAddModal(header.id)}
-                                isEditing={editingHeader?.id === header.id}
-                                editingHeader={editingHeader}
-                                setEditing={setEditingHeader}
+                                onOpen={() => setSelectedCategoryId(header.id)}
+                                onEdit={() => openEditModal(header)}
                                 onUpdate={(id, data) => updateMutation.mutate({ id, data })}
                                 onDelete={() => handleDelete(header)}
                             />
                         ))
+                        }
+                        </div>
                     )}
                 </div>
             </div>
@@ -219,27 +235,32 @@ const TicketConfiguration = () => {
                 <div className="modal-overlay">
                     <div className="modal-content animate-fade-in modal-md">
                         <div className="modal-header">
-                            <h2 className="modal-title">{formData.parent_id ? 'Add Sub-Header' : 'Add Header'}</h2>
-                            <button onClick={() => setShowAddModal(false)} className="modal-close-btn"><X size={24} /></button>
+                            <h2 className="modal-title">
+                                {editingHeader ? 'Edit Category' : formData.parent_id ? 'Add Sub-category' : 'Add Category'}
+                            </h2>
+                            <button onClick={() => { setShowAddModal(false); setEditingHeader(null); }} className="modal-close-btn" aria-label="Close dialog"><X size={24} /></button>
                         </div>
                         <div className="modal-body">
                             {formData.parent_id && (
                                 <div style={{ padding: '0.75rem', backgroundColor: '#eff6ff', color: '#1e40af', borderRadius: '0.5rem', fontSize: '0.875rem' }}>
-                                    Adding under: <strong>{headers.find(h => h.id === formData.parent_id)?.name}</strong>
+                                    {editingHeader ? 'Under category:' : 'Adding under:'}{' '}
+                                    <strong>{headers.find(h => h.id === formData.parent_id)?.name}</strong>
                                 </div>
                             )}
                             <div>
-                                <label className="form-label">Name</label>
+                                <label className="form-label" htmlFor="configuration-category-name">Name</label>
                                 <input
+                                    id="configuration-category-name"
                                     className="form-input"
                                     value={formData.name}
                                     onChange={e => setFormData({ ...formData, name: e.target.value })}
-                                    placeholder="Enter name"
+                                    placeholder="Enter category name"
                                 />
                             </div>
                             <div>
-                                <label className="form-label">Description</label>
+                                <label className="form-label" htmlFor="configuration-category-description">Description</label>
                                 <textarea
+                                    id="configuration-category-description"
                                     className="form-textarea"
                                     rows={3}
                                     value={formData.description}
@@ -256,134 +277,153 @@ const TicketConfiguration = () => {
                             </div>
                         </div>
                         <div className="modal-footer">
-                            <button onClick={() => setShowAddModal(false)} className="btn-secondary">Cancel</button>
-                            <button onClick={handleCreate} disabled={createMutation.isPending} className="btn-primary">
-                                {createMutation.isPending ? 'Saving...' : 'Create'}
+                            <button onClick={() => { setShowAddModal(false); setEditingHeader(null); }} className="btn-secondary">Cancel</button>
+                            <button
+                                onClick={handleSave}
+                                disabled={createMutation.isPending || updateMutation.isPending}
+                                className="btn-primary"
+                            >
+                                <Save size={16} />
+                                {createMutation.isPending || updateMutation.isPending ? 'Saving...' : editingHeader ? 'Save changes' : 'Create'}
                             </button>
                         </div>
                     </div>
                 </div>
             )}
-        </div>
-    );
-};
 
-const HeaderItem = ({ header, expanded, onToggle, onAddSub, isEditing, editingHeader, setEditing, onUpdate, onDelete }) => {
-    const [editForm, setEditForm] = useState({ ...header });
-    const hasSub = header.sub_categories?.length > 0;
+            {selectedCategoryId !== null && (() => {
+                const selectedCategory = headers.find((category) => category.id === selectedCategoryId);
+                if (!selectedCategory) return null;
 
-    // Reset edit form when entering edit mode
-    React.useEffect(() => {
-        if (isEditing) {
-            setEditForm({ ...header });
-        }
-    }, [isEditing, header]);
-
-    // Handle sub-category update
-    const handleSubUpdate = (subId, data) => {
-        onUpdate(subId, data);
-        setEditing(null);
-    };
-
-    if (isEditing) {
-        return (
-            <div className="admin-edit-item">
-                <div className="space-y-3">
-                    <input
-                        className="form-input"
-                        value={editForm.name}
-                        onChange={e => setEditForm({ ...editForm, name: e.target.value })}
-                        autoFocus
-                    />
-                    <div className="edit-actions">
-                        <button onClick={() => setEditing(null)} className="btn-secondary py-1 px-3 text-sm">Cancel</button>
-                        <button onClick={() => onUpdate(header.id, editForm)} className="btn-primary py-1 px-3 text-sm">Save</button>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
-    return (
-        <div className="admin-list-item mb-2 p-0 overflow-hidden">
-            <div className="p-4 flex items-center justify-between hover:bg-gray-50/50">
-                <div className="flex items-center gap-3 flex-1 cursor-pointer" onClick={hasSub ? onToggle : undefined}>
-                    {hasSub ? (expanded ? <ChevronDown size={20} className="text-gray-400" /> : <ChevronRight size={20} className="text-gray-400" />) : <div className="w-5" />}
-
-                    <div className="flex items-center gap-4">
-                        <span className="font-bold text-gray-900">{header.name}</span>
-                        <ToggleSwitch
-                            checked={header.is_active}
-                            onChange={(checked) => onUpdate(header.id, { is_active: checked })}
-                            label={header.is_active ? 'Active' : 'Inactive'}
-                        />
-                    </div>
-                </div>
-                <div className="flex items-center gap-1">
-                    <button onClick={onAddSub} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Plus size={18} /></button>
-                    <button onClick={() => setEditing(header)} className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"><Edit size={18} /></button>
-                    <button onClick={onDelete} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={18} /></button>
-                </div>
-            </div>
-            {expanded && hasSub && (
-                <div className="sub-list-container">
-                    {header.sub_categories.map(sub => {
-                        const isSubEditing = editingHeader?.id === sub.id;
-
-                        if (isSubEditing) {
-                            return (
-                                <SubHeaderEdit
-                                    key={sub.id}
-                                    sub={sub}
-                                    onCancel={() => setEditing(null)}
-                                    onSave={(data) => handleSubUpdate(sub.id, data)}
-                                />
-                            );
-                        }
-
-                        return (
-                            <div key={sub.id} className="sub-list-item">
-                                <div className="flex items-center gap-4 flex-1">
-                                    <span className={`sub - item - text ${!sub.is_active ? 'text-gray-400' : ''} `}>{sub.name}</span>
-                                    <ToggleSwitch
-                                        checked={sub.is_active}
-                                        onChange={(checked) => onUpdate(sub.id, { is_active: checked })}
-                                    />
+                return (
+                    <div className="modal-overlay configuration-details-overlay" onMouseDown={(event) => {
+                        if (event.target === event.currentTarget) setSelectedCategoryId(null);
+                    }}>
+                        <section
+                            className="modal-content configuration-details-modal"
+                            role="dialog"
+                            aria-modal="true"
+                            aria-labelledby="configuration-details-title"
+                        >
+                            <header className="configuration-details-header">
+                                <div>
+                                    <h2 id="configuration-details-title" className="configuration-details-title">
+                                        {selectedCategory.name}
+                                    </h2>
+                                    <p className="configuration-details-description">
+                                        {selectedCategory.description || 'Manage sub-categories and their availability.'}
+                                    </p>
                                 </div>
-                                <div className="flex gap-1">
-                                    <button onClick={() => setEditing(sub)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"><Edit size={16} /></button>
-                                    <button onClick={() => onDelete(sub)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"><Trash2 size={16} /></button>
+                                <button
+                                    type="button"
+                                    className="modal-close-btn"
+                                    onClick={() => setSelectedCategoryId(null)}
+                                    aria-label="Close category details"
+                                >
+                                    <X size={22} />
+                                </button>
+                            </header>
+                            <div className="configuration-details-body">
+                                <div className="configuration-details-toolbar">
+                                    <div className="configuration-subcategory-heading">
+                                        Sub-categories
+                                        <span>{selectedCategory.sub_categories?.length || 0}</span>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => openAddModal(selectedCategory.id)}
+                                        className="configuration-action-add"
+                                    >
+                                        <Plus size={16} /> Add sub-category
+                                    </button>
                                 </div>
+                                {selectedCategory.sub_categories?.length ? (
+                                    <div className="configuration-details-list">
+                                        {selectedCategory.sub_categories.map((sub) => (
+                                            <SubcategoryItem
+                                                key={sub.id}
+                                                sub={sub}
+                                                onUpdate={(data) => updateMutation.mutate({ id: sub.id, data })}
+                                                onEdit={() => openEditModal({ ...sub, parent_id: selectedCategory.id })}
+                                                onDelete={() => handleDelete({ ...sub, parent_id: selectedCategory.id })}
+                                            />
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="configuration-details-empty">
+                                        <FolderTree size={28} />
+                                        <p>No sub-categories yet.</p>
+                                    </div>
+                                )}
                             </div>
-                        );
-                    })}
-                </div>
-            )}
+                        </section>
+                    </div>
+                );
+            })()}
         </div>
     );
 };
 
-const SubHeaderEdit = ({ sub, onCancel, onSave }) => {
-    const [name, setName] = useState(sub.name);
-
+const HeaderItem = ({ header, onOpen, onEdit, onUpdate, onDelete }) => {
     return (
-        <div className="sub-list-item bg-blue-50/50">
-            <input
-                className="form-input py-1 px-2 text-sm h-8"
-                value={name}
-                onChange={e => setName(e.target.value)}
-                autoFocus
-                onKeyDown={e => {
-                    if (e.key === 'Enter') onSave({ name });
-                    if (e.key === 'Escape') onCancel();
-                }}
+        <article
+            className={`configuration-category-card ${header.is_active ? '' : 'is-inactive'}`}
+            onClick={onOpen}
+        >
+            <div className="configuration-category-card-header">
+                <button
+                    type="button"
+                    className="configuration-category-identity"
+                    onClick={(event) => { event.stopPropagation(); onOpen(); }}
+                    aria-label={`Open ${header.name} category details`}
+                >
+                    <span className="configuration-category-icon"><FolderTree size={20} /></span>
+                    <span className="configuration-category-identity-copy">
+                        <span className="configuration-category-name">{header.name}</span>
+                        <span className="configuration-category-subcount">
+                            {header.sub_categories?.length || 0} sub-categories
+                        </span>
+                    </span>
+                </button>
+                <ToggleSwitch
+                    checked={Boolean(header.is_active)}
+                    onChange={(checked) => onUpdate(header.id, { is_active: checked })}
+                    label={header.is_active ? 'Active' : 'Inactive'}
+                    ariaLabel={`${header.is_active ? 'Deactivate' : 'Activate'} ${header.name}`}
+                />
+            </div>
+            {header.description && <p className="configuration-category-description">{header.description}</p>}
+            <div className="configuration-category-actions">
+                <div className="configuration-icon-actions">
+                    <button type="button" onClick={(event) => { event.stopPropagation(); onEdit(); }} aria-label={`Edit ${header.name}`} title="Edit category"><Edit size={17} /></button>
+                    <button type="button" onClick={(event) => { event.stopPropagation(); onDelete(); }} aria-label={`Delete ${header.name}`} title="Delete category"><Trash2 size={17} /></button>
+                </div>
+            </div>
+        </article>
+    );
+};
+
+const SubcategoryItem = ({ sub, onUpdate, onEdit, onDelete }) => (
+    <article className={`configuration-subcategory-card ${sub.is_active ? '' : 'is-inactive'}`}>
+        <div className="configuration-subcategory-info">
+            <span className="configuration-subcategory-name">{sub.name}</span>
+            {sub.description && <span className="configuration-subcategory-description">{sub.description}</span>}
+            <span className={`configuration-status ${sub.is_active ? 'is-active' : ''}`}>
+                {sub.is_active ? 'Active' : 'Inactive'}
+            </span>
+        </div>
+        <div className="configuration-subcategory-controls">
+            <ToggleSwitch
+                checked={Boolean(sub.is_active)}
+                onChange={(checked) => onUpdate({ is_active: checked })}
+                ariaLabel={`${sub.is_active ? 'Deactivate' : 'Activate'} ${sub.name}`}
             />
-            <div className="flex gap-1 ml-2">
-                <button onClick={() => onSave({ name })} className="p-1.5 text-green-600 hover:bg-green-50 rounded"><CheckCircle2 size={16} /></button>
-                <button onClick={onCancel} className="p-1.5 text-red-600 hover:bg-red-50 rounded"><XCircle size={16} /></button>
+            <div className="configuration-icon-actions">
+                <button type="button" onClick={onEdit} aria-label={`Edit ${sub.name}`} title="Edit sub-category"><Edit size={16} /></button>
+                <button type="button" onClick={onDelete} aria-label={`Delete ${sub.name}`} title="Delete sub-category"><Trash2 size={16} /></button>
             </div>
         </div>
-    );
-};
+    </article>
+);
 
 export default TicketConfiguration;

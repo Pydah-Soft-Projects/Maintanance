@@ -59,6 +59,7 @@ const getRequesterLabel = (ticket) =>
 
 const TaskManagement = () => {
     const hasPermission = useAuthStore((state) => state.hasPermission);
+    const authUser = useAuthStore((state) => state.user);
     const [selectedRequesterAudience, setRequesterAudience] = useState('student');
     const [selectedTab, setActiveTab] = useState('pending'); // pending, assigned, resolved
     const allowedAudiences = REQUESTER_AUDIENCES
@@ -76,6 +77,7 @@ const TaskManagement = () => {
         search: ''
     });
     const [selectedTicket, setSelectedTicket] = useState(null);
+    const [ticketInitialAction, setTicketInitialAction] = useState(null);
     const [showAssignModal, setShowAssignModal] = useState(false);
     const [showStatusModal, setShowStatusModal] = useState(false);
     const [showCommentModal, setShowCommentModal] = useState(false);
@@ -139,7 +141,7 @@ const TaskManagement = () => {
             const response = await api.get(`/tickets/${selectedTicket.id}`);
             return response.data?.data;
         },
-        enabled: !!selectedTicket?.id && !showAssignModal && !showStatusModal && !showCommentModal
+        enabled: !!selectedTicket?.id
     });
 
     const { data: usersData } = useQuery({
@@ -175,6 +177,7 @@ const TaskManagement = () => {
         onSuccess: () => {
             toast.success('Ticket assigned successfully');
             setShowAssignModal(false);
+            setTicketInitialAction(null);
             setAssignForm({ assigned_to: [], notes: '' });
             queryClient.invalidateQueries(['tickets']);
             queryClient.invalidateQueries(['ticket-audience-counts']);
@@ -249,8 +252,53 @@ const TaskManagement = () => {
         return matchesStatus && matchesCategory && matchesSearch;
     });
 
-    const managersList = employeesData?.filter(u => u.legacy_role !== 'worker' && u.role !== 'worker') || [];
-    const workersList = employeesData?.filter(u => u.legacy_role === 'worker' || u.role === 'worker') || [];
+    const currentUserId = authUser?.rbac_user_id || authUser?.id;
+    const currentEmployee = employeesData?.find((employee) =>
+        String(employee.rbac_user_id || employee.id) === String(currentUserId)
+    );
+    const currentCategories = Array.isArray(currentEmployee?.assigned_categories)
+        ? currentEmployee.assigned_categories.map(String)
+        : [];
+    const currentSubcategories = Array.isArray(currentEmployee?.assigned_subcategories)
+        ? currentEmployee.assigned_subcategories.map(String)
+        : [];
+    const scopePriority = (employee, ticket) => {
+        const categories = Array.isArray(employee.assigned_categories)
+            ? employee.assigned_categories.map(String)
+            : [];
+        const subcategories = Array.isArray(employee.assigned_subcategories)
+            ? employee.assigned_subcategories.map(String)
+            : [];
+        if (ticket.sub_category_id != null && subcategories.includes(String(ticket.sub_category_id))) return 0;
+        if (ticket.category_id != null && categories.includes(String(ticket.category_id))) return 1;
+        return categories.length || subcategories.length ? 3 : 2;
+    };
+    const orderAssignees = (people) => [...people].sort((first, second) =>
+        scopePriority(first, ticketDetails || selectedTicket || {}) -
+            scopePriority(second, ticketDetails || selectedTicket || {}) ||
+        Number(first.active_tickets_count || 0) - Number(second.active_tickets_count || 0) ||
+        String(first.name || '').localeCompare(String(second.name || ''))
+    );
+    const managersList = orderAssignees(
+        employeesData?.filter((employee) => employee.legacy_role !== 'worker' && employee.role !== 'worker') || []
+    );
+    const workersList = orderAssignees(
+        employeesData?.filter((employee) => employee.legacy_role === 'worker' || employee.role === 'worker') || []
+    );
+    const prioritizedTickets = [...filteredTickets].sort((first, second) => {
+        const getPriority = (ticket) => {
+            const assignedToCurrentUser = ticket.assignments?.some((assignment) =>
+                currentUserId != null &&
+                String(assignment.assigned_to) === String(currentUserId) &&
+                assignment.is_active !== false
+            );
+            if (assignedToCurrentUser) return 0;
+            if (ticket.sub_category_id != null && currentSubcategories.includes(String(ticket.sub_category_id))) return 1;
+            if (ticket.category_id != null && currentCategories.includes(String(ticket.category_id))) return 2;
+            return 3;
+        };
+        return getPriority(first) - getPriority(second);
+    });
 
     // Handlers
     const handleAssign = () => {
@@ -259,21 +307,29 @@ const TaskManagement = () => {
     };
 
     const handleStatusUpdate = () => {
-        if (!statusForm.status) return toast.error('Select a status');
-        statusMutation.mutate({ ticketId: selectedTicket.id, data: statusForm });
+        const status = statusForm.status || selectedTicket.status;
+        if (!status) return toast.error('Select a status');
+        statusMutation.mutate({ ticketId: selectedTicket.id, data: { ...statusForm, status } });
     };
 
-    // Modal Openers
-    const openAssignModal = (ticket) => {
+    const openTicketDetails = (ticket) => {
         setSelectedTicket(ticket);
-        setAssignForm({ assigned_to: ticket.assignments?.map(a => a.assigned_to) || [], notes: '' });
-        setShowAssignModal(true);
-    };
-
-    const openStatusModal = (ticket) => {
-        setSelectedTicket(ticket);
+        setTicketInitialAction(null);
         setStatusForm({ status: ticket.status, notes: '' });
-        setShowStatusModal(true);
+        setAssignForm({ assigned_to: ticket.assignments?.map((assignment) => assignment.assigned_to) || [], notes: '' });
+        setCommentForm({ comment_text: '', is_internal: false });
+    };
+
+    // Prepare inline action forms
+    const openAssignmentEditor = (ticket) => {
+        openTicketDetails(ticket);
+        setAssignTab('managers');
+        setTicketInitialAction('assign');
+    };
+
+    const openStatusEditor = (ticket) => {
+        openTicketDetails(ticket);
+        setStatusForm({ status: ticket.status, notes: '' });
     };
 
     if (isLoading) {
@@ -282,30 +338,15 @@ const TaskManagement = () => {
 
     return (
         <div className="admin-page-container">
-            {/* Requester audience selector */}
-            <div className="admin-audience-selector animate-fade-in">
-                {REQUESTER_AUDIENCES.filter(({ id }) => allowedAudiences.includes(id)).map(({ id, label, icon: Icon }) => (
-                    <button
-                        key={id}
-                        type="button"
-                        onClick={() => setRequesterAudience(id)}
-                        className={`admin-audience-btn ${requesterAudience === id ? 'active' : ''}`}
-                    >
-                        <Icon size={18} />
-                        <span>{label}</span>
-                        <span className="admin-audience-count">
-                            {audienceCounts?.[id] ?? 0}
-                        </span>
-                    </button>
-                ))}
-            </div>
-
-            {/* Main Content Card - Using CSSFlex via card-base */}
-            <div className="card-base" style={{ padding: 0, overflow: 'hidden' }}>
-                {/* Tabs Section - Pure CSS */}
-                <div className="admin-tabs-container">
+            <header className="page-header complaints-page-header">
+                <div className="complaints-page-heading">
+                    <h1 className="page-title">Complaints</h1>
+                    <p className="page-subtitle">Review, assign, and track incoming complaints.</p>
+                </div>
+                <div className="admin-tabs-container complaints-status-tabs">
                     <div className="admin-tabs-list">
                         <button
+                            type="button"
                             onClick={() => setActiveTab('pending')}
                             className={`admin-tab-btn ${activeTab === 'pending' ? 'active-pending' : ''}`}
                             hidden={!allowedTabs.includes('pending')}
@@ -314,6 +355,7 @@ const TaskManagement = () => {
                             <span className="admin-tab-count">{getTabCount('pending')}</span>
                         </button>
                         <button
+                            type="button"
                             onClick={() => setActiveTab('assigned')}
                             className={`admin-tab-btn ${activeTab === 'assigned' ? 'active-assigned' : ''}`}
                             hidden={!allowedTabs.includes('assigned')}
@@ -322,6 +364,7 @@ const TaskManagement = () => {
                             <span className="admin-tab-count">{getTabCount('assigned')}</span>
                         </button>
                         <button
+                            type="button"
                             onClick={() => setActiveTab('resolved')}
                             className={`admin-tab-btn ${activeTab === 'resolved' ? 'active-resolved' : ''}`}
                             hidden={!allowedTabs.includes('resolved')}
@@ -331,10 +374,13 @@ const TaskManagement = () => {
                         </button>
                     </div>
                 </div>
+            </header>
 
+            {/* Complaints table and filters */}
+            <div className="card-base complaints-table-card" style={{ padding: 0, overflow: 'hidden' }}>
                 {/* Filters Section - Pure CSS */}
                 <div className="admin-filters-section">
-                    <div className="admin-filters-grid">
+                    <div className="admin-filters-grid complaints-filter-row">
                         <div className="input-group-wrapper">
                             <Search className="input-icon" size={16} />
                             <input
@@ -359,6 +405,24 @@ const TaskManagement = () => {
                                 ))}
                             </select>
                         </div>
+                        <div className="admin-audience-selector" role="tablist" aria-label="Filter complaints by requester">
+                            {REQUESTER_AUDIENCES.filter(({ id }) => allowedAudiences.includes(id)).map(({ id, label, icon: Icon }) => (
+                                <button
+                                    key={id}
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={requesterAudience === id}
+                                    onClick={() => setRequesterAudience(id)}
+                                    className={`admin-audience-btn ${requesterAudience === id ? 'active' : ''}`}
+                                >
+                                    <Icon size={17} />
+                                    <span>{label}</span>
+                                    <span className="admin-audience-count">
+                                        {audienceCounts?.[id] ?? 0}
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
                     </div>
                 </div>
 
@@ -377,11 +441,22 @@ const TaskManagement = () => {
                         </thead>
                         <tbody>
                             {filteredTickets.length > 0 ? (
-                                filteredTickets.map((ticket) => (
+                                prioritizedTickets.map((ticket) => {
+                                    const assignedToCurrentUser = ticket.assignments?.some((assignment) =>
+                                        currentUserId != null &&
+                                        String(assignment.assigned_to) === String(currentUserId) &&
+                                        assignment.is_active !== false
+                                    );
+                                    const matchesSubcategory = ticket.sub_category_id != null &&
+                                        currentSubcategories.includes(String(ticket.sub_category_id));
+                                    const matchesCategory = ticket.category_id != null &&
+                                        currentCategories.includes(String(ticket.category_id));
+                                    const hasScopeMatch = matchesSubcategory || matchesCategory;
+                                    return (
                                     <tr
                                         key={ticket.id}
-                                        className="admin-table-row-clickable"
-                                        onClick={() => setSelectedTicket(ticket)}
+                                        className={`admin-table-row-clickable ${assignedToCurrentUser ? 'ticket-priority-assigned' : hasScopeMatch ? 'ticket-priority-scoped' : ''}`}
+                                        onClick={() => openTicketDetails(ticket)}
                                     >
                                         <td>
                                             <span className="text-sm font-bold text-gray-900">{ticket.ticket_number}</span>
@@ -389,6 +464,15 @@ const TaskManagement = () => {
                                         </td>
                                         <td>
                                             <div className="text-sm font-medium text-gray-900 truncate max-w-xs">{ticket.title}</div>
+                                            {(assignedToCurrentUser || hasScopeMatch) && (
+                                                <span className={`ticket-priority-badge ${assignedToCurrentUser ? 'is-assigned' : ''}`}>
+                                                    {assignedToCurrentUser
+                                                        ? 'Assigned to you'
+                                                        : matchesSubcategory
+                                                            ? 'Your sub-category'
+                                                            : 'Your category'}
+                                                </span>
+                                            )}
                                         </td>
                                         <td>
                                             <div className="text-sm font-medium text-gray-900">{getRequesterLabel(ticket)}</div>
@@ -408,19 +492,20 @@ const TaskManagement = () => {
                                         </td>
                                         <td onClick={(e) => e.stopPropagation()}>
                                             <div className="flex items-center gap-2">
-                                                <button onClick={() => setSelectedTicket(ticket)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-100" title="View Details">
+                                                <button onClick={() => openTicketDetails(ticket)} className="p-2 text-blue-600  rounded-lg transition-colors border border-transparent " title="View Details">
                                                     <Eye size={18} />
                                                 </button>
-                                                <button onClick={() => openAssignModal(ticket)} className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors border border-transparent hover:border-green-100" title="Assign">
+                                                <button onClick={() => openAssignmentEditor(ticket)} className="p-2 text-green-600  rounded-lg transition-colors border border-transparent " title="Assign">
                                                     <UserPlus size={18} />
                                                 </button>
-                                                <button onClick={() => openStatusModal(ticket)} className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors border border-transparent hover:border-purple-100" title="Update Status">
+                                                <button onClick={() => openStatusEditor(ticket)} className="p-2 text-purple-600  rounded-lg transition-colors border border-transparent " title="Update Status">
                                                     <Edit size={18} />
                                                 </button>
                                             </div>
                                         </td>
                                     </tr>
-                                ))
+                                    );
+                                })
                             ) : (
                                 <tr>
                                     <td colSpan="6" style={{ padding: '4rem 0', textAlign: 'center' }}>
@@ -440,20 +525,46 @@ const TaskManagement = () => {
             </div>
 
             {/* Modals */}
-            {selectedTicket && !showAssignModal && !showStatusModal && !showCommentModal && (
+            {selectedTicket && (
                 <TicketDetailsModal
                     ticket={ticketDetails || selectedTicket}
                     isLoading={ticketDetailsLoading && !ticketDetails}
-                    onClose={() => setSelectedTicket(null)}
-                    onAssign={() => openAssignModal(selectedTicket)}
+                    initialAction={ticketInitialAction}
+                    onClose={() => {
+                        setSelectedTicket(null);
+                        setTicketInitialAction(null);
+                    }}
+                    onAssign={() => openAssignmentEditor(ticketDetails || selectedTicket)}
                     onRemoveAssignment={(assignmentId) =>
                         removeAssignmentMutation.mutate({ ticketId: selectedTicket.id, assignmentId })
                     }
-                    onStatusUpdate={() => openStatusModal(selectedTicket)}
-                    onAddComment={() => {
-                        setSelectedTicket(selectedTicket);
-                        setShowCommentModal(true);
+                    statusForm={statusForm}
+                    onStatusChange={setStatusForm}
+                    onStatusSubmit={handleStatusUpdate}
+                    statusUpdating={statusMutation.isPending}
+                    assignForm={assignForm}
+                    managersList={managersList}
+                    workersList={workersList}
+                    assignTab={assignTab}
+                    onAssignTabChange={setAssignTab}
+                    onAssignToggle={(userId) => {
+                        const selected = assignForm.assigned_to.includes(userId);
+                        setAssignForm({
+                            ...assignForm,
+                            assigned_to: selected
+                                ? assignForm.assigned_to.filter((id) => id !== userId)
+                                : [...assignForm.assigned_to, userId]
+                        });
                     }}
+                    onAssignSubmit={handleAssign}
+                    assignSaving={assignMutation.isPending}
+                    commentForm={commentForm}
+                    onCommentChange={setCommentForm}
+                    onCommentSubmit={() => {
+                        if (!commentForm.comment_text.trim()) return toast.error('Please enter a response');
+                        commentMutation.mutate({ ticketId: selectedTicket.id, data: commentForm });
+                    }}
+                    commentSaving={commentMutation.isPending}
                 />
             )}
 
@@ -466,7 +577,7 @@ const TaskManagement = () => {
                                 <h2 className="text-xl font-bold text-gray-900">Assign Ticket</h2>
                                 <p className="text-sm text-gray-500 mt-1">Select personnel to handle this request</p>
                             </div>
-                            <button onClick={() => setShowAssignModal(false)} className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-400 hover:text-gray-600">
+                            <button onClick={() => setShowAssignModal(false)} className="p-2  rounded-full transition-colors text-gray-400 ">
                                 <XCircle size={24} />
                             </button>
                         </div>
@@ -477,7 +588,7 @@ const TaskManagement = () => {
                                     onClick={() => setAssignTab('managers')}
                                     className={`flex-1 flex items-center justify-center space-x-2 py-3 rounded-lg text-sm font-semibold transition-all duration-200 ease-out ${assignTab === 'managers'
                                         ? 'bg-white text-primary shadow-sm ring-1 ring-black/5 scale-[1.02]'
-                                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'
+                                        : 'text-gray-500  '
                                         }`}
                                 >
                                     <span>Managers</span>
@@ -490,7 +601,7 @@ const TaskManagement = () => {
                                     onClick={() => setAssignTab('workers')}
                                     className={`flex-1 flex items-center justify-center space-x-2 py-3 rounded-lg text-sm font-semibold transition-all duration-200 ease-out ${assignTab === 'workers'
                                         ? 'bg-white text-primary shadow-sm ring-1 ring-black/5 scale-[1.02]'
-                                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'
+                                        : 'text-gray-500  '
                                         }`}
                                 >
                                     <span>Workers</span>
@@ -510,7 +621,7 @@ const TaskManagement = () => {
                                                 return (
                                                     <label key={user.id} className={`group flex items-start p-3.5 rounded-xl cursor-pointer transition-all border-2 ${assignForm.assigned_to.includes(userId)
                                                         ? 'bg-blue-50 border-blue-500 shadow-sm'
-                                                        : 'bg-white hover:bg-gray-50 border-transparent hover:border-gray-200 shadow-sm'
+                                                        : 'bg-white  border-transparent  shadow-sm'
                                                         }`}>
                                                         <div className="mt-1 relative">
                                                             <input
@@ -571,7 +682,7 @@ const TaskManagement = () => {
                                                 return (
                                                     <label key={user.id} className={`group flex items-start p-3.5 rounded-xl cursor-pointer transition-all border-2 ${assignForm.assigned_to.includes(userId)
                                                         ? 'bg-blue-50 border-blue-500 shadow-sm'
-                                                        : 'bg-white hover:bg-gray-50 border-transparent hover:border-gray-200 shadow-sm'
+                                                        : 'bg-white  border-transparent  shadow-sm'
                                                         }`}>
                                                         <div className="mt-1 relative">
                                                             <input
@@ -626,8 +737,8 @@ const TaskManagement = () => {
                             </div>
                         </div>
                         <div className="modal-footer p-5 border-t border-gray-100 bg-white rounded-b-2xl flex items-center justify-end gap-3">
-                            <button onClick={() => setShowAssignModal(false)} className="px-5 py-2.5 rounded-lg text-sm font-semibold text-gray-700 hover:text-gray-900 hover:bg-gray-100 transition-colors">Cancel</button>
-                            <button onClick={handleAssign} disabled={assignMutation.isPending} className="px-5 py-2.5 rounded-lg text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-600/30 disabled:opacity-70 disabled:shadow-none transition-all transform hover:scale-[1.02] active:scale-[0.98]">
+                            <button onClick={() => setShowAssignModal(false)} className="px-5 py-2.5 rounded-lg text-sm font-semibold text-gray-700   transition-colors">Cancel</button>
+                            <button onClick={handleAssign} disabled={assignMutation.isPending} className="px-5 py-2.5 rounded-lg text-sm font-bold text-white bg-blue-600  shadow-lg shadow-blue-600/30 disabled:opacity-70 disabled:shadow-none transition-all transform  active:scale-[0.98]">
                                 {assignMutation.isPending
                                     ? 'Saving...'
                                     : assignForm.assigned_to.length === 0

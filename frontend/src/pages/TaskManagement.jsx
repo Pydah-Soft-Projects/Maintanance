@@ -174,12 +174,12 @@ const TaskManagement = () => {
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Task Management</h1>
+                    <h1 className="text-2xl font-bold text-gray-900">Complaints</h1>
                     <p className="text-gray-600 mt-1">Manage complaint categories and sub-levels</p>
                 </div>
                 <button
                     onClick={() => openAddModal()}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg  flex items-center gap-2"
                 >
                     <Plus size={20} />
                     Add Category
@@ -201,7 +201,7 @@ const TaskManagement = () => {
                             <p className="mt-4 text-gray-500">No categories found</p>
                             <button
                                 onClick={() => openAddModal()}
-                                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg "
                             >
                                 Create First Category
                             </button>
@@ -317,14 +317,14 @@ const CategoryItem = ({
                         <button
                             onClick={() => onUpdate(editForm)}
                             disabled={updateLoading}
-                            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-2"
+                            className="px-4 py-2 bg-green-600 text-white rounded-lg  disabled:opacity-50 flex items-center gap-2"
                         >
                             <Save size={16} />
                             {updateLoading ? 'Saving...' : 'Save'}
                         </button>
                         <button
                             onClick={onCancelEdit}
-                            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg "
                         >
                             Cancel
                         </button>
@@ -336,10 +336,10 @@ const CategoryItem = ({
 
     return (
         <div className="border rounded-lg">
-            <div className="p-4 flex items-center justify-between hover:bg-gray-50">
+            <div className="p-4 flex items-center justify-between ">
                 <div className="flex items-center gap-3 flex-1">
                     {hasSubCategories && (
-                        <button onClick={onToggle} className="text-gray-400 hover:text-gray-600">
+                        <button onClick={onToggle} className="text-gray-400 ">
                             {expanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
                         </button>
                     )}
@@ -359,14 +359,14 @@ const CategoryItem = ({
                 <div className="flex items-center gap-2">
                     <button
                         onClick={() => onAddSub()}
-                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
+                        className="p-2 text-blue-600  rounded-lg"
                         title="Add Sub-category"
                     >
                         <Plus size={18} />
                     </button>
                     <button
                         onClick={() => onEdit(category)}
-                        className="p-2 text-green-600 hover:bg-green-50 rounded-lg"
+                        className="p-2 text-green-600  rounded-lg"
                         title="Edit"
                     >
                         <Edit size={18} />
@@ -374,7 +374,7 @@ const CategoryItem = ({
                     <button
                         onClick={() => onDelete(category)}
                         disabled={deleteLoading}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg disabled:opacity-50"
+                        className="p-2 text-red-600  rounded-lg disabled:opacity-50"
                         title="Delete"
                     >
                         <Trash2 size={18} />
@@ -465,14 +465,14 @@ const SubCategoryItem = ({
                         <button
                             onClick={() => onUpdate(editForm)}
                             disabled={updateLoading}
-                            className="px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-2 text-sm"
+                            className="px-3 py-1.5 bg-green-600 text-white rounded-lg  disabled:opacity-50 flex items-center gap-2 text-sm"
                         >
                             <Save size={14} />
                             Save
                         </button>
                         <button
                             onClick={onCancelEdit}
-                            className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm"
+                            className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-lg  text-sm"
                         >
                             Cancel
                         </button>
@@ -483,7 +483,7 @@ const SubCategoryItem = ({
     }
 
     return (
-        <div className="p-3 bg-white border rounded-lg flex items-center justify-between hover:bg-gray-50">
+        <div className="p-3 bg-white border rounded-lg flex items-center justify-between ">
             <div className="flex-1">
                 <div className="flex items-center gap-2">
                     <span className="text-sm text-gray-500">└─</span>
@@ -499,7 +499,7 @@ const SubCategoryItem = ({
             <div className="flex items-center gap-2">
                 <button
                     onClick={() => onEdit(subCategory)}
-                    className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg"
+                    className="p-1.5 text-green-600  rounded-lg"
                     title="Edit"
                 >
                     <Edit size={16} />
@@ -507,7 +507,7 @@ const SubCategoryItem = ({
                 <button
                     onClick={() => onDelete(subCategory)}
                     disabled={deleteLoading}
-                    className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg disabled:opacity-50"
+                    className="p-1.5 text-red-600  rounded-lg disabled:opacity-50"
                     title="Delete"
                 >
                     <Trash2 size={16} />
@@ -528,7 +528,7 @@ const AddCategoryModal = ({ formData, setFormData, categories, onClose, onSave, 
                     <h2 className="text-xl font-bold text-gray-900">
                         {formData.parent_id ? 'Add Sub-category' : 'Add Category'}
                     </h2>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+                    <button onClick={onClose} className="text-gray-400 ">
                         <X size={24} />
                     </button>
                 </div>
@@ -603,14 +603,14 @@ const AddCategoryModal = ({ formData, setFormData, categories, onClose, onSave, 
                     <div className="flex items-center justify-end gap-3 pt-4">
                         <button
                             onClick={onClose}
-                            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg "
                         >
                             Cancel
                         </button>
                         <button
                             onClick={onSave}
                             disabled={loading || !formData.name.trim()}
-                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="px-4 py-2 bg-blue-600 text-white rounded-lg  disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {loading ? 'Creating...' : 'Create'}
                         </button>

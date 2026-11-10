@@ -23,12 +23,12 @@ const UserManagement = () => {
 
     return (
         <div className="admin-page-container">
-            <div className="mb-6">
-                <h1 className="text-2xl font-bold text-slate-900">User Management</h1>
-                <p className="mt-1 text-sm text-slate-500">
+            <header className="page-header">
+                <h1 className="page-title">User Management</h1>
+                <p className="page-subtitle">
                     Provision users from HRMS and manage ticket roles. Authentication is verified via HRMS.
                 </p>
-            </div>
+            </header>
 
             <div className="mb-6 flex gap-2 border-b border-slate-200">
                 {canViewUsers && <button
@@ -37,7 +37,7 @@ const UserManagement = () => {
                     className={`border-b-2 px-4 py-3 text-sm font-semibold transition-colors ${
                         activeTab === 'users'
                             ? 'border-blue-600 text-blue-700'
-                            : 'border-transparent text-slate-500 hover:text-slate-800'
+                            : 'border-transparent text-slate-500 '
                     }`}
                     aria-current={activeTab === 'users' ? 'page' : undefined}
                 >
@@ -50,7 +50,7 @@ const UserManagement = () => {
                         className={`border-b-2 px-4 py-3 text-sm font-semibold transition-colors ${
                             activeTab === 'roles'
                                 ? 'border-blue-600 text-blue-700'
-                                : 'border-transparent text-slate-500 hover:text-slate-800'
+                                : 'border-transparent text-slate-500 '
                         }`}
                         aria-current={activeTab === 'roles' ? 'page' : undefined}
                     >

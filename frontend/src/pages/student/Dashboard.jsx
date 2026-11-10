@@ -51,7 +51,7 @@ const Dashboard = () => {
                     return (
                         <div
                             key={idx}
-                            className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs hover:shadow-sm transition-all"
+                            className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs  transition-all"
                         >
                             <div className="flex items-center justify-between mb-3">
                                 <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
@@ -79,7 +79,7 @@ const Dashboard = () => {
                         </h2>
                         <Link
                             to="/student/my-tickets"
-                            className="text-xs font-semibold text-sky-600 hover:text-sky-700 flex items-center gap-1"
+                            className="text-xs font-semibold text-sky-600  flex items-center gap-1"
                         >
                             <span>View All</span>
                             <ArrowRight size={13} />
@@ -92,7 +92,7 @@ const Dashboard = () => {
                                 <div
                                     key={ticket.id}
                                     onClick={() => navigate('/student/my-tickets')}
-                                    className="bg-white rounded-xl border border-slate-200/80 p-3.5 sm:p-4 shadow-2xs hover:border-sky-300 hover:shadow-xs transition-all flex items-center justify-between gap-3 cursor-pointer"
+                                    className="bg-white rounded-xl border border-slate-200/80 p-3.5 sm:p-4 shadow-2xs   transition-all flex items-center justify-between gap-3 cursor-pointer"
                                 >
                                     <div className="flex items-center gap-3 min-w-0">
                                         <div className="w-9 h-9 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center shrink-0 border border-sky-100">
@@ -133,7 +133,7 @@ const Dashboard = () => {
                             </p>
                             <Link
                                 to="/student/raise-ticket"
-                                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-white bg-sky-600 hover:bg-sky-700 transition-colors shadow-2xs"
+                                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-white bg-sky-600  transition-colors shadow-2xs"
                             >
                                 <Plus size={15} />
                                 <span>Raise First Ticket</span>
@@ -150,7 +150,7 @@ const Dashboard = () => {
                     <div className="space-y-3">
                         <Link
                             to="/student/raise-ticket"
-                            className="block p-4 rounded-2xl bg-gradient-to-br from-sky-600 to-indigo-600 text-white shadow-sm shadow-sky-500/20 hover:shadow-md hover:scale-[1.01] transition-all"
+                            className="block p-4 rounded-2xl bg-gradient-to-br from-sky-600 to-indigo-600 text-white shadow-sm shadow-sky-500/20   transition-all"
                         >
                             <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center mb-2.5">
                                 <Plus size={18} />
@@ -163,7 +163,7 @@ const Dashboard = () => {
 
                         <Link
                             to="/student/my-tickets"
-                            className="block p-4 rounded-2xl bg-white border border-slate-200/80 shadow-xs hover:border-sky-300 hover:shadow-sm hover:scale-[1.01] transition-all"
+                            className="block p-4 rounded-2xl bg-white border border-slate-200/80 shadow-xs    transition-all"
                         >
                             <div className="w-8 h-8 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center mb-2.5 border border-sky-100">
                                 <Ticket size={18} />

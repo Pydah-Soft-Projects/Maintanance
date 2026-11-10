@@ -331,7 +331,7 @@ const TicketManagement = () => {
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
                             {tickets.map((ticket) => (
-                                <tr key={ticket.id} className="hover:bg-gray-50">
+                                <tr key={ticket.id} className="">
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <span className="text-sm font-medium text-gray-900">{ticket.ticket_number}</span>
                                     </td>
@@ -367,20 +367,20 @@ const TicketManagement = () => {
                                         <div className="flex items-center gap-2">
                                             <button
                                                 onClick={() => setSelectedTicket(ticket)}
-                                                className="text-blue-600 hover:text-blue-900"
+                                                className="text-blue-600 "
                                             >
                                                 <Eye size={16} />
                                             </button>
                                             <button
                                                 onClick={() => openAssignModal(ticket)}
-                                                className="text-green-600 hover:text-green-900"
+                                                className="text-green-600 "
                                                 title="Assign"
                                             >
                                                 <UserPlus size={16} />
                                             </button>
                                             <button
                                                 onClick={() => openStatusModal(ticket)}
-                                                className="text-purple-600 hover:text-purple-900"
+                                                className="text-purple-600 "
                                                 title="Update Status"
                                             >
                                                 <Edit size={16} />
@@ -528,7 +528,7 @@ const TicketDetailsModal = ({ ticket, onClose, onAssign, onStatusUpdate, onAddCo
             <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
                 <div className="p-6 border-b flex items-center justify-between">
                     <h2 className="text-xl font-bold text-gray-900">Ticket Details</h2>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+                    <button onClick={onClose} className="text-gray-400 ">
                         <XCircle size={24} />
                     </button>
                 </div>
@@ -663,28 +663,28 @@ const TicketDetailsModal = ({ ticket, onClose, onAssign, onStatusUpdate, onAddCo
                     <div className="flex items-center gap-3 pt-4 border-t">
                         <button
                             onClick={onAssign}
-                            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2"
+                            className="px-4 py-2 bg-green-600 text-white rounded-lg  flex items-center gap-2"
                         >
                             <UserPlus size={18} />
                             Assign
                         </button>
                         <button
                             onClick={onStatusUpdate}
-                            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2"
+                            className="px-4 py-2 bg-purple-600 text-white rounded-lg  flex items-center gap-2"
                         >
                             <Edit size={18} />
                             Update Status
                         </button>
                         <button
                             onClick={onAddComment}
-                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+                            className="px-4 py-2 bg-blue-600 text-white rounded-lg  flex items-center gap-2"
                         >
                             <MessageSquare size={18} />
                             Add Comment
                         </button>
                         <button
                             onClick={onClose}
-                            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg "
                         >
                             Close
                         </button>
@@ -710,7 +710,7 @@ const AssignModal = ({ ticket, users, form, setForm, onClose, onAssign, loading 
             <div className="bg-white rounded-lg max-w-2xl w-full">
                 <div className="p-6 border-b flex items-center justify-between">
                     <h2 className="text-xl font-bold text-gray-900">Assign Ticket</h2>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+                    <button onClick={onClose} className="text-gray-400 ">
                         <XCircle size={24} />
                     </button>
                 </div>
@@ -719,7 +719,7 @@ const AssignModal = ({ ticket, users, form, setForm, onClose, onAssign, loading 
                         <label className="block text-sm font-medium text-gray-700 mb-2">Select Users</label>
                         <div className="border rounded-lg max-h-64 overflow-y-auto">
                             {users.map((user) => (
-                                <label key={user.id} className="flex items-center p-3 hover:bg-gray-50 cursor-pointer border-b last:border-b-0">
+                                <label key={user.id} className="flex items-center p-3  cursor-pointer border-b last:border-b-0">
                                     <input
                                         type="checkbox"
                                         checked={form.assigned_to.includes(user.id)}
@@ -747,14 +747,14 @@ const AssignModal = ({ ticket, users, form, setForm, onClose, onAssign, loading 
                     <div className="flex items-center justify-end gap-3 pt-4">
                         <button
                             onClick={onClose}
-                            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg "
                         >
                             Cancel
                         </button>
                         <button
                             onClick={onAssign}
                             disabled={loading || form.assigned_to.length === 0}
-                            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="px-4 py-2 bg-green-600 text-white rounded-lg  disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {loading ? 'Assigning...' : 'Assign'}
                         </button>
@@ -772,7 +772,7 @@ const StatusModal = ({ ticket, form, setForm, onClose, onUpdate, loading }) => {
             <div className="bg-white rounded-lg max-w-md w-full">
                 <div className="p-6 border-b flex items-center justify-between">
                     <h2 className="text-xl font-bold text-gray-900">Update Status</h2>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+                    <button onClick={onClose} className="text-gray-400 ">
                         <XCircle size={24} />
                     </button>
                 </div>
@@ -802,14 +802,14 @@ const StatusModal = ({ ticket, form, setForm, onClose, onUpdate, loading }) => {
                     <div className="flex items-center justify-end gap-3 pt-4">
                         <button
                             onClick={onClose}
-                            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg "
                         >
                             Cancel
                         </button>
                         <button
                             onClick={onUpdate}
                             disabled={loading || !form.status}
-                            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="px-4 py-2 bg-purple-600 text-white rounded-lg  disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {loading ? 'Updating...' : 'Update Status'}
                         </button>
@@ -827,7 +827,7 @@ const CommentModal = ({ ticket, form, setForm, onClose, onAdd, loading }) => {
             <div className="bg-white rounded-lg max-w-2xl w-full">
                 <div className="p-6 border-b flex items-center justify-between">
                     <h2 className="text-xl font-bold text-gray-900">Add Comment</h2>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+                    <button onClick={onClose} className="text-gray-400 ">
                         <XCircle size={24} />
                     </button>
                 </div>
@@ -857,14 +857,14 @@ const CommentModal = ({ ticket, form, setForm, onClose, onAdd, loading }) => {
                     <div className="flex items-center justify-end gap-3 pt-4">
                         <button
                             onClick={onClose}
-                            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg "
                         >
                             Cancel
                         </button>
                         <button
                             onClick={onAdd}
                             disabled={loading || !form.comment_text.trim()}
-                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="px-4 py-2 bg-blue-600 text-white rounded-lg  disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {loading ? 'Adding...' : 'Add Comment'}
                         </button>

@@ -50,7 +50,6 @@ const EmployeeHistoryModal = ({ isOpen, onClose, employee }) => {
             iconBg: 'bg-gradient-to-br from-blue-500 to-blue-600',
             iconGlow: 'shadow-blue-500/25',
             valueText: 'text-blue-600',
-            hoverShadow: 'hover:shadow-blue-200/50',
             ringColor: 'ring-blue-100'
         };
 
@@ -61,7 +60,6 @@ const EmployeeHistoryModal = ({ isOpen, onClose, employee }) => {
                 iconBg: 'bg-gradient-to-br from-orange-500 to-amber-600',
                 iconGlow: 'shadow-orange-500/25',
                 valueText: 'text-orange-600',
-                hoverShadow: 'hover:shadow-orange-200/50',
                 ringColor: 'ring-orange-100'
             };
         } else if (color?.includes('green') || color?.includes('teal')) {
@@ -71,7 +69,6 @@ const EmployeeHistoryModal = ({ isOpen, onClose, employee }) => {
                 iconBg: 'bg-gradient-to-br from-emerald-500 to-teal-600',
                 iconGlow: 'shadow-emerald-500/25',
                 valueText: 'text-emerald-600',
-                hoverShadow: 'hover:shadow-emerald-200/50',
                 ringColor: 'ring-emerald-100'
             };
         } else if (color?.includes('red')) {
@@ -81,7 +78,6 @@ const EmployeeHistoryModal = ({ isOpen, onClose, employee }) => {
                 iconBg: 'bg-gradient-to-br from-red-500 to-rose-600',
                 iconGlow: 'shadow-red-500/25',
                 valueText: 'text-red-600',
-                hoverShadow: 'hover:shadow-red-200/50',
                 ringColor: 'ring-red-100'
             };
         }
@@ -90,8 +86,8 @@ const EmployeeHistoryModal = ({ isOpen, onClose, employee }) => {
             <div className={`
                 group relative flex flex-col p-6 rounded-2xl border-2 
                 bg-gradient-to-br ${colorClasses.wrapper} ${colorClasses.border}
-                shadow-lg ${colorClasses.hoverShadow}
-                hover:shadow-xl hover:scale-[1.02] hover:-translate-y-1
+                shadow-lg
+
                 transition-all duration-300 ease-out
                 overflow-hidden
             `}>
@@ -106,7 +102,7 @@ const EmployeeHistoryModal = ({ isOpen, onClose, employee }) => {
                     relative w-14 h-14 rounded-xl flex items-center justify-center mb-5
                     ${colorClasses.iconBg} ${colorClasses.iconGlow}
                     shadow-lg
-                    group-hover:scale-110 group-hover:rotate-3
+
                     transition-all duration-300 ease-out
                     ring-4 ${colorClasses.ringColor}
                 `}>
@@ -115,7 +111,7 @@ const EmployeeHistoryModal = ({ isOpen, onClose, employee }) => {
                     {/* Animated glow pulse */}
                     <div className={`
                         absolute inset-0 rounded-xl ${colorClasses.iconBg} 
-                        opacity-0 group-hover:opacity-20 
+                        opacity-0
                         animate-pulse transition-opacity duration-300
                     `}></div>
                 </div>
@@ -128,7 +124,7 @@ const EmployeeHistoryModal = ({ isOpen, onClose, employee }) => {
                     <p className={`
                         text-4xl font-black ${colorClasses.valueText} 
                         tracking-tight leading-none
-                        group-hover:scale-105 transition-transform duration-300
+                         transition-transform duration-300
                         inline-block
                     `}>
                         {value || 0}
@@ -139,7 +135,7 @@ const EmployeeHistoryModal = ({ isOpen, onClose, employee }) => {
                 <div className={`
                     absolute -bottom-2 -right-2 w-20 h-20 
                     ${colorClasses.iconBg} opacity-5 rounded-full blur-2xl
-                    group-hover:opacity-10 transition-opacity duration-300
+                     transition-opacity duration-300
                 `}></div>
             </div>
         );
@@ -184,7 +180,7 @@ const EmployeeHistoryModal = ({ isOpen, onClose, employee }) => {
                         </div>
                         <button
                             onClick={onClose}
-                            className="p-2.5 text-white/80 hover:bg-white/20 hover:text-white rounded-xl transition-all duration-200 hover:rotate-90"
+                            className="p-2.5 text-white/80   rounded-xl transition-all duration-200 "
                         >
                             <X size={28} />
                         </button>
@@ -254,7 +250,7 @@ const EmployeeHistoryModal = ({ isOpen, onClose, employee }) => {
                                             {tickets.map((ticket) => (
                                                 <div
                                                     key={ticket.id}
-                                                    className="group bg-gray-50 border border-gray-200 rounded-xl p-5 shadow-sm hover:shadow-md hover:border-blue-300 transition-all duration-200 h-full flex flex-col"
+                                                    className="group bg-gray-50 border border-gray-200 rounded-xl p-5 shadow-sm   transition-all duration-200 h-full flex flex-col"
                                                 >
                                                     <div className="flex flex-col gap-3 flex-1">
                                                         {/* Header: ID & Status */}
@@ -269,7 +265,7 @@ const EmployeeHistoryModal = ({ isOpen, onClose, employee }) => {
 
                                                         {/* Title & Category */}
                                                         <div className="flex-1">
-                                                            <h4 className="font-bold text-gray-900 text-sm leading-snug group-hover:text-blue-600 transition-colors mb-2 line-clamp-2">
+                                                            <h4 className="font-bold text-gray-900 text-sm leading-snug  transition-colors mb-2 line-clamp-2">
                                                                 {ticket.title}
                                                             </h4>
                                                             {ticket.category_name && (

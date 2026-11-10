@@ -63,6 +63,11 @@ const AdminDashboard = () => {
 
     return (
         <div className="admin-page-container">
+            <header className="page-header">
+                <h1 className="page-title">Dashboard</h1>
+                <p className="page-subtitle">A clear overview of support requests and team activity.</p>
+            </header>
+
             {/* Stats Grid */}
             <div className="stats-grid animate-fade-in">
                 <StatCard
@@ -73,7 +78,7 @@ const AdminDashboard = () => {
                     onClick={() => navigate('/task-management')}
                 />
                 <StatCard
-                    label="Pending Actions"
+                    label="Pending Complaints"
                     value={getCount('pending')}
                     icon={Clock}
                     color="yellow"
@@ -101,7 +106,7 @@ const AdminDashboard = () => {
                     <h2 className="dashboard-section-title">Quick Actions</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                         <div
-                            className="card-base hover:shadow-md cursor-pointer transition-all bg-white"
+                            className="card-base  cursor-pointer transition-all bg-white"
                             onClick={() => navigate('/task-management')}
                         >
                             <div className="flex items-center gap-4">
@@ -109,15 +114,15 @@ const AdminDashboard = () => {
                                     <Clock size={24} />
                                 </div>
                                 <div className="flex-1">
-                                    <h3 className="font-bold text-gray-900">Review Pending Tasks</h3>
-                                    <p className="text-sm text-gray-500 mt-1">Check tickets that need attention</p>
+                                    <h3 className="font-bold text-gray-900">Review Pending Complaints</h3>
+                                    <p className="text-sm text-gray-500 mt-1">Check complaints that need attention</p>
                                 </div>
                                 <ArrowRight size={20} className="text-gray-300" />
                             </div>
                         </div>
 
                         <div
-                            className="card-base hover:shadow-md cursor-pointer transition-all bg-white"
+                            className="card-base  cursor-pointer transition-all bg-white"
                             onClick={() => navigate('/user-management')}
                         >
                             <div className="flex items-center gap-4">
@@ -133,7 +138,7 @@ const AdminDashboard = () => {
                         </div>
 
                         <div
-                            className="card-base hover:shadow-md cursor-pointer transition-all bg-white"
+                            className="card-base  cursor-pointer transition-all bg-white"
                             onClick={() => navigate('/configuration')}
                         >
                             <div className="flex items-center gap-4">

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { LogIn, Loader2, Eye, EyeOff, Users } from 'lucide-react';
+import { LogIn, Loader2, Eye, EyeOff, Users, Wrench, ClipboardCheck, CircleCheck } from 'lucide-react';
 import useAuthStore from '../store/authStore';
 import toast from 'react-hot-toast';
 
@@ -65,168 +65,153 @@ const Login = ({ isStudent = false }) => {
     };
 
     return (
-        <div className="min-h-screen bg-gray-100 flex items-center justify-center p-0 overflow-hidden">
-            {/* Main Card Container */}
+        <main className="login-page relative grid min-h-screen grid-cols-1 items-center gap-8 overflow-hidden px-4 py-10 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(380px,460px)] lg:gap-16 lg:px-[8vw]">
+            <div aria-hidden="true" className="login-orb login-orb-one" />
+            <div aria-hidden="true" className="login-orb login-orb-two" />
+
+            <section className="login-hero relative z-10 mx-auto hidden w-full max-w-xl lg:block">
+                <div className="mb-8 flex h-14 w-14 items-center justify-center rounded-2xl border border-white/15 bg-white/10 text-emerald-300 shadow-lg backdrop-blur">
+                    <Wrench size={26} strokeWidth={1.8} />
+                </div>
+                <p className="mb-4 text-xs font-semibold uppercase tracking-[0.24em] text-emerald-300">
+                    {isStudentLogin ? 'Student services' : 'Support & maintenance'}
+                </p>
+                <h1 className="max-w-lg text-5xl font-semibold leading-[1.12] tracking-tight text-white xl:text-6xl">
+                    A better way to keep things <span className="text-emerald-300">running.</span>
+                </h1>
+                <p className="mt-5 max-w-md text-base leading-7 text-slate-300">
+                    Submit a request, follow its progress, and get back to what matters.
+                </p>
+
+                <div aria-hidden="true" className="login-illustration mt-12 max-w-md">
+                    <div className="login-illustration-glow" />
+                    <div className="login-ticket-card">
+                        <div className="flex items-center justify-between">
+                            <span className="flex items-center gap-2 text-sm font-medium text-white">
+                                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-400/15 text-emerald-300">
+                                    <ClipboardCheck size={17} />
+                                </span>
+                                Maintenance request
+                            </span>
+                            <span className="rounded-full bg-emerald-400/15 px-2.5 py-1 text-[11px] font-medium text-emerald-300">In progress</span>
+                        </div>
+                        <div className="mt-6 h-2 w-4/5 rounded-full bg-white/15" />
+                        <div className="mt-3 h-2 w-3/5 rounded-full bg-white/10" />
+                        <div className="mt-6 flex items-center gap-2 text-xs text-slate-300">
+                            <CircleCheck size={15} className="text-emerald-300" />
+                            Your request is being taken care of
+                        </div>
+                    </div>
+                    <div className="login-illustration-orbit login-illustration-orbit-one" />
+                    <div className="login-illustration-orbit login-illustration-orbit-two" />
+                </div>
+            </section>
+
             <motion.div
-                initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                initial={{ opacity: 0, y: 20, scale: 0.97 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 transition={{ duration: 0.5, ease: "easeOut" }}
-                className="w-full max-w-5xl bg-white rounded-none xl:rounded-2xl shadow-2xl overflow-hidden flex min-h-screen xl:min-h-[600px]"
+                className="login-card relative z-10 mx-auto w-full max-w-md rounded-3xl p-6 shadow-2xl sm:p-10 lg:justify-self-end"
             >
-
-                {/* Left Side - Blue Panel (Hidden on mobile and tablet) */}
-                <div
-                    className="login-left-panel hidden xl:flex xl:w-1/2 bg-[#1A2517] text-white flex-col justify-between p-12 relative overflow-hidden"
-                >
-
-                    {/* Background Pattern/Accents */}
-                    <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
-                        <div className="absolute -top-24 -left-24 w-96 h-96 bg-white rounded-full blur-3xl" />
-                        <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-white rounded-full blur-3xl" />
+                <header className="mb-8 text-center">
+                    <div aria-hidden="true" className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#1A2517] text-emerald-300 shadow-lg shadow-[#1A2517]/20">
+                        <Wrench size={25} strokeWidth={1.8} />
                     </div>
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#61734f]">
+                        {isStudentLogin ? 'Student ' : ''}Support Portal
+                    </p>
+                    <h2 className="text-3xl font-bold tracking-tight text-gray-900">
+                        Welcome back
+                    </h2>
+                    <p className="mt-2 text-sm text-gray-500">
+                        Sign in to manage and track your requests.
+                    </p>
+                </header>
 
-                    {/* Top Content */}
-                    <div className="relative z-10">
-                        <div className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center mb-8 cursor-pointer hover:bg-white/30 transition-all">
-                            <Users size={20} className="text-white" />
-                        </div>
-                        <h2 className="text-4xl font-bold mb-4">Support &<br />Ticket System</h2>
-                        <p className="text-[#A3B18A] text-lg opacity-90">
-                            Streamline your requests and track status in real-time.
-                        </p>
-                    </div>
-
-                    {/* Center Illustration Placeholder */}
-                    <div className="relative z-10 flex-1 flex items-center justify-center my-8">
-                        <div className="relative w-64 h-64">
-                            {/* Abstract representation using CSS/Logo */}
-                            <div className="absolute inset-0 bg-white/10 rounded-full animate-pulse-subtle" />
-                            <img
-                                src={isStudentLogin ? "/logo.png" : "/logo.png"} // TODO: Use student-specific logo if available, e.g. /student-logo.png
-                                alt="Illustration"
-                                className="relative w-full h-full object-contain drop-shadow-2xl"
-                                onError={(e) => e.target.style.display = 'none'}
+                <form onSubmit={handleSubmit} className="space-y-5">
+                    <div>
+                        <label htmlFor="login-username" className="mb-2 block text-sm font-medium text-gray-700">
+                            Username / Admission No / Employee ID
+                        </label>
+                        <div className="group relative">
+                            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                                <Users className="h-5 w-5 text-gray-400 transition-colors group-focus-within:text-[#1A2517]" />
+                            </div>
+                            <input
+                                id="login-username"
+                                type="text"
+                                name="username"
+                                value={formData.username}
+                                onChange={handleChange}
+                                autoComplete="username"
+                                className="block w-full rounded-xl border border-gray-200 bg-white px-3 py-3 pl-10 text-base text-gray-900 placeholder-gray-400 transition-all focus:border-[#1A2517] focus:outline-none focus:ring-4 focus:ring-[#1A2517]/10"
+                                placeholder="Enter Username, Admission No, or Employee ID"
+                                disabled={loading}
                             />
                         </div>
                     </div>
 
-                    {/* Bottom Content */}
-                    <div className="relative z-10">
-                        <div className="flex items-center gap-3 bg-white/10 p-4 rounded-xl backdrop-blur-sm border border-white/10">
-                            <div className="w-10 h-10 rounded-full bg-[#FAFAF5] flex items-center justify-center shadow-lg">
-                                <Users size={18} className="text-[#1A2517]" />
+                    <div>
+                        <label htmlFor="login-password" className="mb-2 block text-sm font-medium text-gray-700">
+                            Password
+                        </label>
+                        <div className="group relative">
+                            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                                <LogIn className="h-5 w-5 text-gray-400 transition-colors group-focus-within:text-[#1A2517]" />
                             </div>
-                            <div>
-                                <p className="text-xs font-medium text-[#A3B18A] uppercase tracking-wider">Connect With Us</p>
-                                <p className="text-sm font-semibold">24/7 Support Center</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Right Side - Login Form */}
-                <div className="w-full xl:w-1/2 p-6 sm:p-8 md:p-12 flex flex-col justify-center bg-white relative">
-                    <div className="max-w-sm mx-auto w-full">
-                        {/* Mobile Logo - Only show on larger mobile screens */}
-                        <img
-                            src="/logo.png"
-                            alt="Logo"
-                            className="h-12 sm:h-16 w-auto mx-auto mb-4 sm:mb-6 xl:hidden object-contain"
-                        />
-
-                        <div className="text-center mb-6 sm:mb-8">
-                            <h2 className="text-xl sm:text-2xl xl:text-3xl font-bold text-gray-900 mb-2">
-                                Welcome Back
-                            </h2>
-                            <p className="text-gray-500 text-xs sm:text-sm">
-                                Sign in to your account to continue
-                            </p>
-                        </div>
-
-                        <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
-                            <div>
-                                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5 sm:mb-2">
-                                    Username / Admission No / Employee ID
-                                </label>
-                                <div className="relative group">
-                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                        <Users className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400 group-focus-within:text-[#1A2517] transition-colors" />
-                                    </div>
-                                    <input
-                                        type="text"
-                                        name="username"
-                                        value={formData.username}
-                                        onChange={handleChange}
-                                        className="block w-full pl-9 sm:pl-10 pr-3 py-2.5 sm:py-3 bg-[#FAFAF5]/50 border border-gray-200 rounded-xl text-sm sm:text-base text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1A2517]/20 focus:border-[#1A2517] transition-all"
-                                        placeholder="Enter Username, Admission No, or Employee ID"
-                                        disabled={loading}
-                                    />
-                                </div>
-                            </div>
-
-                            <div>
-                                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5 sm:mb-2">
-                                    Password
-                                </label>
-                                <div className="relative group">
-                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                        <LogIn className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400 group-focus-within:text-[#1A2517] transition-colors" />
-                                    </div>
-                                    <input
-                                        type={showPassword ? 'text' : 'password'}
-                                        name="password"
-                                        value={formData.password}
-                                        onChange={handleChange}
-                                        className="block w-full pl-9 sm:pl-10 pr-10 py-2.5 sm:py-3 bg-[#FAFAF5]/50 border border-gray-200 rounded-xl text-sm sm:text-base text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#1A2517]/20 focus:border-[#1A2517] transition-all"
-                                        placeholder="Enter your password"
-                                        disabled={loading}
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowPassword(!showPassword)}
-                                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 cursor-pointer"
-                                    >
-                                        {showPassword ? <EyeOff size={16} className="sm:w-[18px] sm:h-[18px]" /> : <Eye size={16} className="sm:w-[18px] sm:h-[18px]" />}
-                                    </button>
-                                </div>
-                            </div>
-
-                            <button
-                                type="submit"
+                            <input
+                                id="login-password"
+                                type={showPassword ? 'text' : 'password'}
+                                name="password"
+                                value={formData.password}
+                                onChange={handleChange}
+                                autoComplete="current-password"
+                                className="block w-full rounded-xl border border-gray-200 bg-white px-3 py-3 pl-10 pr-11 text-base text-gray-900 placeholder-gray-400 transition-all focus:border-[#1A2517] focus:outline-none focus:ring-4 focus:ring-[#1A2517]/10"
+                                placeholder="Enter your password"
                                 disabled={loading}
-                                className="w-full flex justify-center items-center py-2.5 sm:py-3 px-4 border border-transparent rounded-xl shadow-lg text-sm font-medium text-white bg-[#1A2517] hover:bg-[#11180F] active:bg-[#11180F] transition-all transform hover:-translate-y-0.5"
-                            >
-                                {loading ? (
-                                    <>
-                                        <Loader2 className="animate-spin -ml-1 mr-2 h-4 w-4 sm:h-5 sm:w-5" />
-                                        Signing in...
-                                    </>
-                                ) : (
-                                    <>
-                                        Sign In
-                                    </>
-                                )
-                                }
-                            </button>
-                        </form>
-
-                        <div className="mt-6 sm:mt-8 text-center space-y-3 sm:space-y-4">
+                            />
                             <button
                                 type="button"
-                                onClick={() => toast('Please contact administrator to reset password')}
-                                className="block mx-auto text-xs sm:text-sm font-medium text-[#1A2517] hover:text-[#11180F] transition-colors"
+                                onClick={() => setShowPassword(!showPassword)}
+                                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                                className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 transition-colors "
                             >
-                                Forgot Password?
+                                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                             </button>
-
-                            <p className="text-[10px] sm:text-xs text-gray-400">
-                                © {new Date().getFullYear()} Support &amp; Ticket Management System
-                            </p>
                         </div>
                     </div>
+
+                    <button
+                        type="submit"
+                        disabled={loading}
+                        className="flex w-full items-center justify-center rounded-xl bg-[#1A2517] px-4 py-3.5 text-sm font-semibold text-white shadow-lg shadow-[#1A2517]/20 transition-all   disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                        {loading ? (
+                            <>
+                                <Loader2 className="-ml-1 mr-2 h-5 w-5 animate-spin" />
+                                Signing in...
+                            </>
+                        ) : (
+                            'Sign In'
+                        )}
+                    </button>
+                </form>
+
+                <div className="mt-6 text-center">
+                    <button
+                        type="button"
+                        onClick={() => toast('Please contact administrator to reset password')}
+                        className="text-sm font-medium text-[#1A2517] transition-colors "
+                    >
+                        Forgot Password?
+                    </button>
                 </div>
+
+                <footer className="mt-8 border-t border-gray-100 pt-5 text-center text-xs text-gray-400">
+                    © {new Date().getFullYear()} Support &amp; Ticket Management System
+                </footer>
             </motion.div>
-        </div>
+        </main>
     );
 };
 
