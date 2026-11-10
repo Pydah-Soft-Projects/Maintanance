@@ -33,7 +33,7 @@ jobs:
       - name: Install & build
         working-directory: frontend
         env:
-          VITE_API_URL: /api
+          VITE_API_URL: https://maintenance-backend.pydah.edu.in/api
           VITE_MAINTENANCE_APP_URL: https://maintenance.pydah.edu.in
           VITE_HRMS_PORTAL_URL: https://hrms.pydah.edu.in
         run: |
@@ -166,6 +166,8 @@ jobs:
             fi
 
             curl -fsS http://127.0.0.1:5005/health 2>/dev/null || curl -fsS http://127.0.0.1:5001/health || true
+            echo
+            curl -fsS http://127.0.0.1/health -H 'Host: maintenance-backend.pydah.edu.in' 2>/dev/null || true
             echo
             pm2 list
 
