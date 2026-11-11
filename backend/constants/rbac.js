@@ -3,7 +3,10 @@
 // User Roles
 const USER_ROLES = {
     SUPER_ADMIN: 'super_admin',
-    ADMIN: 'admin', // Legacy support
+    SUB_ADMIN: 'sub_admin',
+    ADMIN: 'sub_admin',
+    MANAGER: 'manager',
+    WORKER: 'worker',
     // College Level
     COLLEGE_PRINCIPAL: 'college_principal',
     COLLEGE_AO: 'college_ao', // Administrative Officer
@@ -71,8 +74,7 @@ const hasPermission = (userPermissions, module, operation = 'read') => {
 
 // Legacy support functions
 const canCreateRole = (creatorRole, targetRole) => {
-    if (creatorRole === USER_ROLES.SUPER_ADMIN || creatorRole === 'admin') return true;
-    return false;
+    return creatorRole === USER_ROLES.SUPER_ADMIN;
 };
 
 const validateRoleRequirements = (role, data) => {

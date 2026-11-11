@@ -11,8 +11,7 @@ export { MODULE_ROUTE_MAP, getModuleKeyForPath };
 
 export const resolveUserType = (user) => {
     if (!user) return null;
-    // CRITICAL: Super Admin and Admin are ALWAYS admin, even if an HRMS ID is linked!
-    if (user.role === 'super_admin' || user.role === 'admin') return 'admin';
+    if (user.role === 'super_admin') return 'admin';
     if (user.role === 'student') return 'student';
     // HRMS users without explicit ticket management access are always requesters
     if (user.is_hrms_session || user.hrmsId || user.is_hrms_user) {
@@ -25,8 +24,7 @@ export const resolveUserType = (user) => {
 const resolveDefaultRoute = (user, userType = null) => {
     if (!user) return '/login';
 
-    // Super Admin and Admin ALWAYS route to Admin Dashboard
-    if (user.role === 'super_admin' || user.role === 'admin') {
+    if (user.role === 'super_admin') {
         return '/dashboard';
     }
 
@@ -76,7 +74,7 @@ const useAuthStore = create((set) => {
         hasPermission: (module, action = 'read') => {
             const user = useAuthStore.getState().user;
             if (!user) return false;
-            if (user.role === 'super_admin' || user.role === 'admin') return true;
+            if (user.role === 'super_admin') return true;
             const permissions = user.permissions;
             if (!permissions || typeof permissions !== 'object') return false;
             const modPerm = permissions[module];
@@ -180,7 +178,7 @@ const useAuthStore = create((set) => {
                     return true;
                 }
                 throw new Error('Invalid response');
-            } catch (error) {
+            } catch {
                 set({ user: null, token: null, isAuthenticated: false, userType: null, isLoading: false });
                 localStorage.removeItem('token');
                 localStorage.removeItem('user');

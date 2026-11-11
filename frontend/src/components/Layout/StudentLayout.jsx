@@ -23,7 +23,7 @@ const StudentLayout = () => {
     const navigate = useNavigate();
     const { user, logout } = useAuthStore();
 
-    const isSuperAdminOrAdmin = user?.role === 'super_admin' || user?.role === 'admin';
+    const isSuperAdminOrAdmin = user?.role === 'super_admin';
 
     // Navigation Configuration: Dashboard, Raise Ticket, and Raised Tickets
     const navItems = [
@@ -51,7 +51,7 @@ const StudentLayout = () => {
                 className="fixed inset-0 -z-10 pointer-events-none"
                 style={{
                     opacity: 0.45,
-                    backgroundImage: 'radial-gradient(#BAE6FD 1.2px, transparent 1.2px)',
+                    backgroundImage: 'radial-gradient(var(--primary-100, #E8EEE4) 1.2px, transparent 1.2px)',
                     backgroundSize: '24px 24px'
                 }}
             />
@@ -70,7 +70,7 @@ const StudentLayout = () => {
             {/* Sidebar (Desktop & Tablet) */}
             <aside
                 className={`
-                    fixed inset-y-0 left-0 z-40 w-72 bg-white/95 backdrop-blur-xl border-r border-slate-200/70
+                    fixed inset-y-0 left-0 z-40 w-72 bg-sidebar/95 backdrop-blur-xl border-r border-slate-200/70
                     shadow-[4px_0_24px_-2px_rgba(15,23,42,0.03)] flex flex-col justify-between transition-transform duration-300 ease-in-out
                     ${desktopSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
                     hidden lg:flex
@@ -78,7 +78,7 @@ const StudentLayout = () => {
             >
                 <div className="flex flex-col min-h-0 flex-1 overflow-hidden">
                     {/* Logo & Brand Area */}
-                    <div className="h-16 flex items-center justify-between px-5 border-b border-slate-100 bg-white/60">
+                    <div className="h-16 flex items-center justify-between px-5 border-b border-slate-100 bg-sidebar/60">
                         <div
                             className="flex items-center gap-3 cursor-pointer group"
                             onClick={() => navigate('/student/dashboard')}

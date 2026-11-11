@@ -1,4 +1,4 @@
-const TICKET_MANAGER_ROLES = new Set(['super_admin', 'admin', 'sub_admin']);
+const TICKET_MANAGER_ROLES = new Set(['super_admin', 'sub_admin', 'manager']);
 
 // Ticket-app specific module keys from constants/rbac.js
 const TICKET_MODULES = new Set([

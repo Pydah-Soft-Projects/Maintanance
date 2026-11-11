@@ -7,57 +7,72 @@ export default {
     theme: {
         extend: {
             colors: {
-                // Primary Brand Color: #1A2517 (Deep Olive)
-                primary: '#1A2517',
-                'primary-dark': '#11180F',
-                'primary-light': '#2B3C26',
-
-                // Accent Color: #A3B18A (Sage Green) - Matches text in Deep Olive combo image
-                accent: '#A3B18A',
-                'accent-light': '#CAD2C5',
-                'accent-dark': '#849669',
-
-                // Secondary Color: #FAFAF5 (Milk White)
-                secondary: '#FAFAF5',
-                'secondary-light': '#FFFFFF',
-                'secondary-dark': '#E6E6E1',
-
-                // Neutral Background: #FAFAF5 (Milk White)
-                'neutral-bg': '#FAFAF5',
-
-                // Card / Section Background: #FFFFFF
-                'card-bg': '#FFFFFF',
-
-                // Sidebar Background: #F3F1EB (Slightly darker Milk White)
-                'sidebar-bg': '#F3F1EB',
-
-                // Text Colors
-                'text-primary': '#333333',     // Dark Charcoal
-                'text-secondary': '#555555',   // Medium Gray
-                'muted-text': '#777777',       // Labels, placeholders
-
-                // Border / Divider: #E5E7EB (Light Gray Border)
-                'border-light': '#E5E7EB',
-                'border-lighter': '#F3F4F6',
-
-                // Status Colors
-                success: '#06D6A0',           // Success states and badges
-                warning: '#FFB703',           // Warnings and notices
-                error: '#EF476F',             // Errors and invalid states
-                info: '#118AB2',              // Info states
-
-                // Legacy colors for backward compatibility
+                primary: {
+                    DEFAULT: 'var(--primary, #1A2517)',
+                    hover: 'var(--primary-hover, #11180F)',
+                    light: 'var(--primary-light, #E8EEE4)',
+                    50: 'var(--primary-50, #f8fafc)',
+                    100: 'var(--primary-100, #f1f5f9)',
+                    200: 'var(--primary-200, #e2e8f0)',
+                    300: 'var(--primary-300, #cbd5e1)',
+                    400: 'var(--primary-400, #94a3b8)',
+                    500: 'var(--primary-500, #64748b)',
+                    600: 'var(--primary-600, #475569)',
+                    700: 'var(--primary-700, #334155)',
+                    800: 'var(--primary-800, #1e293b)',
+                    900: 'var(--primary-900, #0f172a)',
+                },
+                secondary: 'var(--secondary, #849669)',
+                accent: 'var(--accent, #A3B18A)',
+                surface: 'var(--surface, #FFFFFF)',
+                background: 'var(--background, #FAFAF5)',
+                sidebar: 'var(--sidebar, #F3F1EB)',
+                'sidebar-text': 'var(--sidebar-text, #333333)',
+                'sidebar-muted': 'var(--sidebar-muted, #777777)',
+                navbar: 'var(--navbar, #FFFFFF)',
+                'text-primary': 'var(--text-primary, #333333)',
+                'text-secondary': 'var(--text-secondary, #555555)',
+                'text-muted': 'var(--text-muted, #777777)',
+                white: 'var(--surface, #FFFFFF)',
+                border: {
+                    DEFAULT: 'var(--border, #E5E7EB)',
+                    strong: 'var(--border-strong, #CBD5E1)',
+                },
+                success: {
+                    DEFAULT: 'var(--success, #15803D)',
+                    light: 'var(--success-light, #F0FDF4)',
+                },
+                warning: {
+                    DEFAULT: 'var(--warning, #A16207)',
+                    light: 'var(--warning-light, #FEFCE8)',
+                },
+                danger: {
+                    DEFAULT: 'var(--danger, #B91C1C)',
+                    light: 'var(--danger-light, #FEF2F2)',
+                },
+                info: {
+                    DEFAULT: 'var(--info, #0369A1)',
+                    light: 'var(--info-light, #F0F9FF)',
+                },
+                'primary-dark': 'var(--primary-hover, #11180F)',
+                'neutral-bg': 'var(--background, #FAFAF5)',
+                'card-bg': 'var(--surface, #FFFFFF)',
+                'sidebar-bg': 'var(--sidebar, #F3F1EB)',
+                'muted-text': 'var(--text-muted, #777777)',
+                'border-light': 'var(--border, #E5E7EB)',
+                'border-lighter': 'var(--background, #FAFAF5)',
+                error: 'var(--danger, #B91C1C)',
                 navy: {
-                    50: '#f8fafc',
-                    100: '#f1f5f9',
-                    200: '#e2e8f0',
-                    300: '#cbd5e1',
-                    400: '#94a3b8',
-                    500: '#64748b',
-                    600: '#475569',
-                    700: '#334155',
-                    800: '#1e293b',
-                    900: '#0f172a',
+                    50: 'var(--background, #FAFAF5)',
+                    100: 'var(--primary-50, #f8fafc)',
+                    200: 'var(--border, #E5E7EB)',
+                    300: 'var(--border-strong, #CBD5E1)',
+                    400: 'var(--text-muted, #777777)',
+                    500: 'var(--text-secondary, #555555)',
+                    600: 'var(--text-secondary, #555555)',
+                    700: 'var(--text-primary, #333333)',
+                    800: 'var(--text-primary, #333333)',
+                    900: 'var(--text-primary, #333333)',
                 },
             },
         },

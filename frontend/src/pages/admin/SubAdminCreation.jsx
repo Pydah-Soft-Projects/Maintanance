@@ -12,14 +12,14 @@ import {
 import '../../styles/admin-pages.css';
 
 const getPermissions = (permissions) => {
-    if (!permissions) return createDefaultTicketPermissions('sub_admin');
+    if (!permissions) return createDefaultTicketPermissions();
     if (typeof permissions === 'string') {
         try {
             return JSON.parse(permissions);
         } catch (error) {
             console.error('Failed to parse sub-admin permissions:', error);
             toast.error('Saved permissions could not be read; reset them before saving.');
-            return createDefaultTicketPermissions('sub_admin');
+            return createDefaultTicketPermissions();
         }
     }
     return permissions;
@@ -32,7 +32,7 @@ const SubAdminCreation = () => {
     const [employeeNo, setEmployeeNo] = useState('');
     const [localName, setLocalName] = useState('');
     const [hrmsSearch, setHrmsSearch] = useState('');
-    const [formPermissions, setFormPermissions] = useState(createDefaultTicketPermissions('sub_admin'));
+    const [formPermissions, setFormPermissions] = useState(createDefaultTicketPermissions());
     const queryClient = useQueryClient();
 
     const {
@@ -99,7 +99,7 @@ const SubAdminCreation = () => {
     });
 
     const removeAccessMutation = useMutation({
-        mutationFn: (id) => api.put(`/rbac/users/${id}/access`, { role: 'staff', permissions: {} }),
+        mutationFn: (id) => api.put(`/rbac/users/${id}/access`, { role: 'worker', permissions: {} }),
         onSuccess: () => {
             toast.success('Sub-admin access removed');
             refreshUserData();
@@ -119,7 +119,7 @@ const SubAdminCreation = () => {
         setHrmsSearch('');
         setFormPermissions(admin
             ? getPermissions(admin.permissions)
-            : createDefaultTicketPermissions('sub_admin'));
+            : createDefaultTicketPermissions());
         setShowModal(true);
     };
 

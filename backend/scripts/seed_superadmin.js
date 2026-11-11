@@ -18,7 +18,7 @@ const superAdminPermissions = {
     category_management: { read: true, write: true, update: true, delete: true }
 };
 
-const adminPermissions = {
+const subAdminPermissions = {
     ticket_dashboard: { read: true },
     ticket_management: { read: true, write: true, update: true, delete: true },
     employee_management: { read: true, write: true, update: true, delete: false },
@@ -28,7 +28,7 @@ const adminPermissions = {
 const managerPermissions = {
     ticket_dashboard: { read: true },
     ticket_management: { read: true, write: true, update: true, delete: false },
-    employee_management: { read: true, write: true, update: false, delete: false },
+    employee_management: { read: true, write: false, update: false, delete: false },
     category_management: { read: true, write: false, update: false, delete: false }
 };
 
@@ -42,29 +42,29 @@ const workerPermissions = {
 const defaultRoles = [
     {
         role_name: 'super_admin',
-        display_name: 'Super Administrator',
+        display_name: 'Superadmin',
         description: 'Full system access with all permissions',
         permissions: JSON.stringify(superAdminPermissions),
         is_system_role: 1
     },
     {
-        role_name: 'admin',
-        display_name: 'Administrator',
-        description: 'Administrative access with most permissions',
-        permissions: JSON.stringify(adminPermissions),
+        role_name: 'sub_admin',
+        display_name: 'Sub-admin',
+        description: 'Can view all complaints, update statuses, and manage maintenance users',
+        permissions: JSON.stringify(subAdminPermissions),
         is_system_role: 1
     },
     {
         role_name: 'manager',
-        display_name: 'Ticket Manager',
-        description: 'Can manage tickets and assign workers',
+        display_name: 'Manager',
+        description: 'Can view all complaints and assign workers',
         permissions: JSON.stringify(managerPermissions),
         is_system_role: 1
     },
     {
         role_name: 'worker',
-        display_name: 'Ticket Worker',
-        description: 'Can view and resolve assigned tickets',
+        display_name: 'Worker',
+        description: 'Can view and update assigned complaints',
         permissions: JSON.stringify(workerPermissions),
         is_system_role: 1
     }

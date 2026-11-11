@@ -25,19 +25,19 @@ router.get(
 
 router.post(
     '/',
-    verifyRole(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN, USER_ROLES.COLLEGE_PRINCIPAL, USER_ROLES.COLLEGE_AO),
+    verifyRole(USER_ROLES.SUPER_ADMIN, USER_ROLES.COLLEGE_PRINCIPAL, USER_ROLES.COLLEGE_AO),
     categoryController.createCategory
 );
 
 router.put(
     '/:id',
-    verifyRole(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN, USER_ROLES.COLLEGE_PRINCIPAL, USER_ROLES.COLLEGE_AO),
+    verifyRole(USER_ROLES.SUPER_ADMIN, USER_ROLES.COLLEGE_PRINCIPAL, USER_ROLES.COLLEGE_AO),
     categoryController.updateCategory
 );
 
 router.delete(
     '/:id',
-    verifyRole(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN, USER_ROLES.COLLEGE_PRINCIPAL),
+    verifyRole(USER_ROLES.SUPER_ADMIN, USER_ROLES.COLLEGE_PRINCIPAL),
     categoryController.deleteCategory
 );
 

@@ -1,31 +1,17 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-    FiPlus,
     FiEdit2,
-    FiTrash2,
     FiUsers,
     FiShield,
     FiX,
     FiSearch,
-    FiLock,
-    FiCheckCircle
+    FiPlus
 } from 'react-icons/fi';
-import { getRoles, createRole, updateRole, deleteRole } from '../../services/roleService';
+import { createRole, getRoles, updateRole } from '../../services/roleService';
 import PermissionMatrix from '../../components/admin/PermissionMatrix';
 import useAuthStore from '../../store/authStore';
+import ApprovalRoleTypes from './ApprovalRoleTypes';
 import './RoleManagement.css';
-
-const EXCLUDED_EXTERNAL_ROLES = new Set([
-    'branch_hod',
-    'college_ao',
-    'college_principal',
-    'office_assistant',
-    'cashier',
-    'faculty',
-    'head_student_clubs',
-    'pydah_coe',
-    'student'
-]);
 
 const MODULE_CONFIG = {
     ticket_dashboard: { label: 'Dashboard', chipClass: 'chip-blue' },
@@ -55,13 +41,12 @@ const getActiveModules = (permissions) => {
 
 const RoleManagement = () => {
     const currentUser = useAuthStore((state) => state.user);
-    const canManageRoles = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
+    const canManageRoles = currentUser?.role === 'super_admin';
     const [roles, setRoles] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [editingRole, setEditingRole] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
-    const [roleFilter, setRoleFilter] = useState('all'); // 'all' | 'system' | 'custom'
 
     const [formData, setFormData] = useState({
         role_name: '',
@@ -89,24 +74,14 @@ const RoleManagement = () => {
         }
     };
 
-    const handleOpenModal = (role = null) => {
-        if (role) {
-            setEditingRole(role);
-            setFormData({
-                role_name: role.role_name,
-                display_name: role.display_name,
-                description: role.description || '',
-                permissions: role.permissions || {}
-            });
-        } else {
-            setEditingRole(null);
-            setFormData({
-                role_name: '',
-                display_name: '',
-                description: '',
-                permissions: initializeEmptyPermissions()
-            });
-        }
+    const handleOpenModal = (role) => {
+        setEditingRole(role);
+        setFormData({
+            role_name: role?.role_name || '',
+            display_name: role?.display_name || '',
+            description: role?.description || '',
+            permissions: role?.permissions || {}
+        });
         setShowModal(true);
         setError('');
         setSuccess('');
@@ -124,92 +99,37 @@ const RoleManagement = () => {
         setError('');
     };
 
-    const initializeEmptyPermissions = () => {
-        return {
-            ticket_dashboard: { read: false },
-            ticket_management: {
-                read: false,
-                pending: false,
-                assigned: false,
-                resolved: false,
-                student: false,
-                faculty: false,
-                write: false,
-                update: false,
-                delete: false
-            },
-            category_management: { read: false, write: false, update: false, delete: false },
-            employee_management: {
-                read: false,
-                users: false,
-                roles: false,
-                write: false,
-                update: false,
-                delete: false
-            }
-        };
-    };
-
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
         setSuccess('');
 
         try {
+            const roleData = {
+                role_name: formData.role_name,
+                display_name: formData.display_name,
+                description: formData.description,
+                permissions: formData.permissions
+            };
             if (editingRole) {
-                // Update existing role
-                await updateRole(editingRole.id, {
-                    role_name: formData.role_name,
-                    display_name: formData.display_name,
-                    description: formData.description,
-                    permissions: formData.permissions
-                });
+                await updateRole(editingRole.id, roleData);
                 setSuccess('Role updated successfully!');
             } else {
-                // Create new role
-                await createRole(formData);
+                await createRole(roleData);
                 setSuccess('Role created successfully!');
             }
 
             await fetchRoles();
-            setTimeout(() => {
-                handleCloseModal();
-            }, 1200);
+            handleCloseModal();
         } catch (err) {
             console.error('Error saving role:', err);
-            setError(err.message || 'Failed to save role');
+            setError(err.message || err.response?.data?.message || 'Failed to save role');
         }
     };
 
-    const handleDelete = async (roleId, roleName) => {
-        if (!confirm(`Are you sure you want to delete the role "${roleName}"?`)) {
-            return;
-        }
-
-        try {
-            await deleteRole(roleId);
-            setSuccess(`Role "${roleName}" deleted successfully!`);
-            await fetchRoles();
-            setTimeout(() => setSuccess(''), 3000);
-        } catch (err) {
-            console.error('Error deleting role:', err);
-            setError(err.message || err.response?.data?.message || 'Failed to delete role');
-            setTimeout(() => setError(''), 4000);
-        }
-    };
-
-    // Filtered roles based on search and type filter (excluding other databases' roles)
+    // Filter active standard and custom roles by search text.
     const filteredRoles = useMemo(() => {
         return roles.filter(role => {
-            if (EXCLUDED_EXTERNAL_ROLES.has(role.role_name)) return false;
-
-            const matchesFilter =
-                roleFilter === 'all' ? true :
-                roleFilter === 'system' ? Boolean(role.is_system_role) :
-                !role.is_system_role;
-
-            if (!matchesFilter) return false;
-
             if (!searchQuery.trim()) return true;
 
             const q = searchQuery.toLowerCase().trim();
@@ -219,16 +139,12 @@ const RoleManagement = () => {
 
             return displayName.includes(q) || roleName.includes(q) || description.includes(q);
         });
-    }, [roles, roleFilter, searchQuery]);
+    }, [roles, searchQuery]);
 
-    // Statistics (excluding other databases' roles)
+    // Role totals include standard and custom roles.
     const stats = useMemo(() => {
-        const validRoles = roles.filter(r => !EXCLUDED_EXTERNAL_ROLES.has(r.role_name));
-        const total = validRoles.length;
-        const system = validRoles.filter(r => r.is_system_role).length;
-        const custom = total - system;
-        const totalUsers = validRoles.reduce((acc, r) => acc + (Number(r.employee_count) || 0), 0);
-        return { total, system, custom, totalUsers };
+        const totalUsers = roles.reduce((acc, role) => acc + (Number(role.employee_count) || 0), 0);
+        return { total: roles.length, totalUsers };
     }, [roles]);
 
     if (loading) {
@@ -278,19 +194,6 @@ const RoleManagement = () => {
                 </div>
             )}
 
-            {canManageRoles && (
-                <div className="role-management-actions">
-                    <button
-                        type="button"
-                        className="btn-primary shrink-0"
-                        onClick={() => handleOpenModal()}
-                    >
-                        <FiPlus size={16} />
-                        <span>Create Role</span>
-                    </button>
-                </div>
-            )}
-
             {/* Quick Metrics Header */}
             <div className="role-stats-grid">
                 <div className="stat-card-compact">
@@ -298,28 +201,8 @@ const RoleManagement = () => {
                         <FiShield size={18} />
                     </div>
                     <div className="stat-content">
-                        <span className="stat-label">Total Roles</span>
+                        <span className="stat-label">Available Roles</span>
                         <span className="stat-value">{stats.total}</span>
-                    </div>
-                </div>
-
-                <div className="stat-card-compact">
-                    <div className="stat-icon-wrapper bg-purple-50 text-purple-600 border border-purple-100">
-                        <FiLock size={18} />
-                    </div>
-                    <div className="stat-content">
-                        <span className="stat-label">System Roles</span>
-                        <span className="stat-value">{stats.system}</span>
-                    </div>
-                </div>
-
-                <div className="stat-card-compact">
-                    <div className="stat-icon-wrapper bg-emerald-50 text-emerald-600 border border-emerald-100">
-                        <FiCheckCircle size={18} />
-                    </div>
-                    <div className="stat-content">
-                        <span className="stat-label">Custom Roles</span>
-                        <span className="stat-value">{stats.custom}</span>
                     </div>
                 </div>
 
@@ -333,6 +216,8 @@ const RoleManagement = () => {
                     </div>
                 </div>
             </div>
+
+            <ApprovalRoleTypes canManage={canManageRoles} />
 
             {/* Roles Table Container */}
             <div className="roles-table-card">
@@ -358,31 +243,16 @@ const RoleManagement = () => {
                             </button>
                         )}
                     </div>
-
-                    <div className="roles-filter-tabs">
+                    {canManageRoles && (
                         <button
                             type="button"
-                            className={`filter-tab ${roleFilter === 'all' ? 'active' : ''}`}
-                            onClick={() => setRoleFilter('all')}
+                            className="btn-primary inline-flex items-center gap-2"
+                            onClick={() => handleOpenModal(null)}
                         >
-                            All ({stats.total})
+                            <FiPlus size={16} />
+                            Create Role
                         </button>
-                        <button
-                            type="button"
-                            className={`filter-tab ${roleFilter === 'system' ? 'active' : ''}`}
-                            onClick={() => setRoleFilter('system')}
-                        >
-                            System ({stats.system})
-                        </button>
-                        <button
-                            type="button"
-                            className={`filter-tab ${roleFilter === 'custom' ? 'active' : ''}`}
-                            onClick={() => setRoleFilter('custom')}
-                        >
-                            Custom ({stats.custom})
-                        </button>
-                    </div>
-
+                    )}
                 </div>
 
                 {/* Mobile Scroll Affordance */}
@@ -407,8 +277,6 @@ const RoleManagement = () => {
                                 filteredRoles.map(role => {
                                     const activeModules = getActiveModules(role.permissions);
                                     const isSystem = Boolean(role.is_system_role);
-                                    const isSuperAdmin = role.role_name === 'super_admin';
-
                                     return (
                                         <tr key={role.id} className="role-table-row">
                                             {/* Role Name & Slug */}
@@ -481,19 +349,6 @@ const RoleManagement = () => {
                                                         <FiEdit2 size={14} />
                                                         <span>Edit</span>
                                                     </button>}
-                                                    {canManageRoles && <button
-                                                        type="button"
-                                                        className={`action-btn delete ${isSuperAdmin ? 'disabled' : ''}`}
-                                                        onClick={() => {
-                                                            if (isSuperAdmin) return;
-                                                            handleDelete(role.id, role.display_name);
-                                                        }}
-                                                        disabled={isSuperAdmin}
-                                                        title={isSuperAdmin ? 'Super Administrator role cannot be deleted' : 'Delete Role'}
-                                                    >
-                                                        <FiTrash2 size={14} />
-                                                        <span>Delete</span>
-                                                    </button>}
                                                 </div>
                                             </td>
                                         </tr>
@@ -536,9 +391,11 @@ const RoleManagement = () => {
                     <div className="modal-content role-modal" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
                             <div>
-                                <h2>{editingRole ? 'Edit Role' : 'Create New Role'}</h2>
+                                <h2>{editingRole ? 'Edit Role' : 'Create Role'}</h2>
                                 <p className="text-xs text-slate-500 mt-0.5">
-                                    {editingRole ? `Update settings and permissions for ${editingRole.display_name}` : 'Define a new role and customize module permissions'}
+                                    {editingRole
+                                        ? `Update settings and permissions for ${editingRole.display_name}`
+                                        : 'Create a role and configure its module permissions'}
                                 </p>
                             </div>
                             <button className="close-btn" onClick={handleCloseModal} aria-label="Close">
@@ -570,14 +427,14 @@ const RoleManagement = () => {
                                                 ...formData,
                                                 role_name: e.target.value.toLowerCase().replace(/\s+/g, '_')
                                             })}
-                                            disabled={Boolean(editingRole?.is_system_role)}
+                                            disabled={Boolean(editingRole)}
                                             placeholder="e.g., principal, supervisor"
                                             required
                                             className="form-input"
                                         />
                                         <small className="form-hint">
-                                            {editingRole?.is_system_role
-                                                ? 'System role slugs are locked and cannot be changed.'
+                                            {editingRole
+                                                ? 'Role keys cannot be changed after creation.'
                                                 : 'Lowercase with underscores only (e.g. branch_admin).'}
                                         </small>
                                     </div>

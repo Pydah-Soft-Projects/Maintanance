@@ -3,10 +3,10 @@ const { masterPool } = require('../config/database');
 const { mergePermissions } = require('../utils/permissions');
 
 /**
- * Check if user is a super admin (including legacy 'admin' role)
+ * Check if user is a super admin.
  */
 const isSuperAdmin = (user) => {
-    return user && (user.role === USER_ROLES.SUPER_ADMIN || user.role === 'admin');
+    return user && user.role === USER_ROLES.SUPER_ADMIN;
 };
 
 /**
@@ -37,7 +37,7 @@ const verifyRole = (...allowedRoles) => {
             });
         }
 
-        // Super admin (including legacy 'admin') bypasses all role checks
+        // Super admin bypasses all role checks
         if (isSuperAdmin(user)) {
             return next();
         }
@@ -68,7 +68,7 @@ const verifyPermission = (module, operation = 'read') => {
             });
         }
 
-        // Super admin (including legacy 'admin') has all permissions
+        // Super admin has all permissions
         if (isSuperAdmin(user)) {
             return next();
         }

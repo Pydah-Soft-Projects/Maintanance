@@ -26,12 +26,8 @@ function normalizeUsername(empDoc, userDoc, email, hrmsIdStr) {
     return String(candidates[0]).trim().toLowerCase().replace(/[^a-z0-9._-]/g, '_').slice(0, 100);
 }
 
-function resolveHrmsRole(hrmsMatchedObj, empDoc, userDoc) {
-    const role = hrmsMatchedObj?.role || userDoc?.role;
-    if (role === 'super_admin' || hrmsMatchedObj?.roles?.includes?.('super_admin')) {
-        return 'super_admin';
-    }
-    return role || DEFAULT_HRMS_ROLE;
+function resolveHrmsRole() {
+    return DEFAULT_HRMS_ROLE;
 }
 
 async function findLocalRbacUser(masterPool, { hrmsIdStr, email, username, empNo }) {
@@ -93,7 +89,6 @@ function buildHrmsSessionProfile({
     mappedUsername,
     mappedRole
 }) {
-    const isSuperOrAdmin = mappedRole === 'super_admin' || mappedRole === 'admin';
     return {
         hrmsId: hrmsIdStr,
         name: mappedName,
@@ -102,7 +97,7 @@ function buildHrmsSessionProfile({
         phone: mappedPhone,
         role: mappedRole,
         is_hrms_session: true,
-        ticketAccess: isSuperOrAdmin ? 'manage' : 'request'
+        ticketAccess: 'request'
     };
 }
 
@@ -193,7 +188,7 @@ async function authenticateHRMSUser(username, password, masterPool) {
             throw err;
         }
 
-        const mappedRole = resolveHrmsRole(hrmsMatchedObj, empDoc, userDoc);
+        const mappedRole = resolveHrmsRole();
         const normalizedEmail = normalizeEmail(mappedEmail, empDoc?.emp_no || hrmsIdStr);
         const normalizedUsername = normalizeUsername(empDoc, userDoc, normalizedEmail, hrmsIdStr);
 

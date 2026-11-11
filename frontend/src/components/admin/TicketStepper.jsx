@@ -9,6 +9,14 @@ const TicketStepper = ({ status }) => {
         { label: 'Resolved', value: 'completed' }
     ];
 
+    if (status === 'rejected') {
+        return (
+            <div className="ticket-progress-rejected" role="status">
+                Complaint rejected
+            </div>
+        );
+    }
+
     const matchedStepIndex = steps.findIndex((step) => step.value === status);
     const currentStepIndex = matchedStepIndex === -1
         ? (status === 'closed' ? steps.length - 1 : 0)

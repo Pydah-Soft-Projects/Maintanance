@@ -22,10 +22,11 @@ import '../../styles/admin-pages.css';
 
 const STATUS_COLORS = {
     pending: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-    approaching: 'bg-blue-100 text-blue-800 border-blue-200',
+    approaching: 'bg-gray-100 text-gray-700 border-gray-200',
     resolving: 'bg-purple-100 text-purple-800 border-purple-200',
     completed: 'bg-green-100 text-green-800 border-green-200',
-    closed: 'bg-gray-100 text-gray-800 border-gray-200'
+    closed: 'bg-gray-100 text-gray-800 border-gray-200',
+    rejected: 'bg-red-100 text-red-800 border-red-200'
 };
 
 const STATUS_LABELS = {
@@ -33,20 +34,15 @@ const STATUS_LABELS = {
     approaching: 'Approaching',
     resolving: 'Resolving',
     completed: 'Completed',
-    closed: 'Closed'
+    closed: 'Closed',
+    rejected: 'Rejected'
 };
 
-const REQUESTER_AUDIENCES = [
-    { id: 'student', label: 'Student', icon: GraduationCap },
-    { id: 'faculty', label: 'Faculty', icon: Briefcase }
+const COMPLAINT_SOURCES = [
+    { id: 'SDMS', label: 'SDMS · Student', icon: GraduationCap, permission: 'student', requesterType: 'student' },
+    { id: 'HMS', label: 'HMS · Hostel', icon: Ticket, permission: 'student', requesterType: 'student' },
+    { id: 'HRMS', label: 'HRMS · Faculty', icon: Briefcase, permission: 'faculty', requesterType: 'staff' }
 ];
-
-const matchesRequesterAudience = (ticket, audience) => {
-    if (audience === 'faculty') {
-        return ticket.requester_type === 'staff';
-    }
-    return !ticket.requester_type || ticket.requester_type === 'student';
-};
 
 const getRequesterLabel = (ticket) =>
     ticket.requester_name ||
@@ -60,17 +56,25 @@ const getRequesterLabel = (ticket) =>
 const TaskManagement = () => {
     const hasPermission = useAuthStore((state) => state.hasPermission);
     const authUser = useAuthStore((state) => state.user);
-    const [selectedRequesterAudience, setRequesterAudience] = useState('student');
-    const [selectedTab, setActiveTab] = useState('pending'); // pending, assigned, resolved
-    const allowedAudiences = REQUESTER_AUDIENCES
-        .map(({ id }) => id)
-        .filter((audience) => hasPermission('ticket_management', audience));
+    const isWorker = authUser?.role === 'worker' ||
+        authUser?.ticketRole === 'worker' ||
+        authUser?.is_worker === true;
+    const canViewEmployeeDirectory = hasPermission('employee_management', 'read');
+    const [selectedReferenceSite, setReferenceSite] = useState('SDMS');
+    const [selectedTab, setActiveTab] = useState(isWorker ? 'assigned' : 'pending');
+    const allowedSources = COMPLAINT_SOURCES.filter(({ permission }) =>
+        hasPermission('ticket_management', permission)
+    );
     const allowedTabs = ['pending', 'assigned', 'resolved']
         .filter((tab) => hasPermission('ticket_management', tab));
-    const requesterAudience = allowedAudiences.includes(selectedRequesterAudience)
-        ? selectedRequesterAudience
-        : allowedAudiences[0];
-    const activeTab = allowedTabs.includes(selectedTab) ? selectedTab : allowedTabs[0];
+    const approvalTab = allowedTabs.includes('pending') ? 'pending' : 'assigned';
+    const referenceSite = allowedSources.some(({ id }) => id === selectedReferenceSite)
+        ? selectedReferenceSite
+        : allowedSources[0]?.id;
+    const selectedSource = COMPLAINT_SOURCES.find(({ id }) => id === referenceSite);
+    const activeTab = isWorker
+        ? 'assigned'
+        : allowedTabs.includes(selectedTab) ? selectedTab : allowedTabs[0];
     const [filters, setFilters] = useState({
         category_id: '',
         assigned_to: '',
@@ -81,10 +85,16 @@ const TaskManagement = () => {
     const [showAssignModal, setShowAssignModal] = useState(false);
     const [showStatusModal, setShowStatusModal] = useState(false);
     const [showCommentModal, setShowCommentModal] = useState(false);
-    const [assignTab, setAssignTab] = useState('managers'); // 'managers' | 'workers'
+    const [assignTab, setAssignTab] = useState('managers');
+    const [hrmsAssigneeSearch, setHrmsAssigneeSearch] = useState('');
 
     // Forms state
-    const [assignForm, setAssignForm] = useState({ assigned_to: [], notes: '' });
+    const [assignForm, setAssignForm] = useState({
+        assigned_to: [],
+        hrms_assignees: [],
+        external_assignees: [],
+        notes: ''
+    });
     const [statusForm, setStatusForm] = useState({ status: '', notes: '' });
     const [commentForm, setCommentForm] = useState({ comment_text: '', is_internal: false });
 
@@ -95,36 +105,39 @@ const TaskManagement = () => {
         switch (tab) {
             case 'pending': return ['pending'];
             case 'assigned': return ['approaching', 'resolving'];
-            case 'resolved': return ['completed', 'closed'];
+            case 'resolved': return ['completed', 'closed', 'rejected'];
             default: return [];
         }
     };
 
     // Queries
-    const { data: audienceCounts } = useQuery({
-        queryKey: ['ticket-audience-counts', allowedAudiences],
+    const { data: sourceCounts } = useQuery({
+        queryKey: ['ticket-source-counts', allowedSources.map(({ id }) => id)],
         queryFn: async () => {
-            const [studentRes, facultyRes] = await Promise.all([
-                allowedAudiences.includes('student')
-                    ? api.get('/tickets?requester_type=student&page=1&limit=1')
-                    : Promise.resolve(null),
-                allowedAudiences.includes('faculty')
-                    ? api.get('/tickets?requester_type=staff&page=1&limit=1')
-                    : Promise.resolve(null)
-            ]);
-            return {
-                student: studentRes?.data?.pagination?.total ?? 0,
-                faculty: facultyRes?.data?.pagination?.total ?? 0
-            };
+            const results = await Promise.all(allowedSources.map(async (source) => {
+                const response = await api.get('/tickets', {
+                    params: {
+                        reference_site: source.id,
+                        requester_type: source.requesterType,
+                        page: 1,
+                        limit: 1
+                    }
+                });
+                return [source.id, response.data?.pagination?.total ?? 0];
+            }));
+            return Object.fromEntries(results);
         },
-        enabled: allowedAudiences.length > 0
+        enabled: !isWorker && allowedSources.length > 0
     });
 
     const { data: ticketsData, isLoading } = useQuery({
-        queryKey: ['tickets', requesterAudience, filters],
+        queryKey: ['tickets', isWorker ? 'assigned-to-me' : referenceSite, filters],
         queryFn: async () => {
             const params = new URLSearchParams();
-            params.append('requester_type', requesterAudience === 'faculty' ? 'staff' : 'student');
+            if (!isWorker) {
+                params.append('requester_type', selectedSource.requesterType);
+                params.append('reference_site', referenceSite);
+            }
             params.append('page', '1');
             params.append('limit', '200');
             const response = await api.get(`/tickets?${params.toString()}`);
@@ -132,7 +145,7 @@ const TaskManagement = () => {
         },
         staleTime: 0,
         refetchOnMount: 'always',
-        enabled: Boolean(requesterAudience && activeTab)
+        enabled: Boolean(activeTab && (isWorker || (referenceSite && selectedSource)))
     });
 
     const { data: ticketDetails, isLoading: ticketDetailsLoading } = useQuery({
@@ -144,12 +157,13 @@ const TaskManagement = () => {
         enabled: !!selectedTicket?.id
     });
 
-    const { data: usersData } = useQuery({
-        queryKey: ['rbac-users'],
+    const { data: ticketApproval, isLoading: ticketApprovalLoading } = useQuery({
+        queryKey: ['ticket-approvals', selectedTicket?.id],
         queryFn: async () => {
-            const response = await api.get('/rbac/users');
-            return response.data?.data || [];
-        }
+            const response = await api.get(`/tickets/${selectedTicket.id}/approvals`);
+            return response.data?.data;
+        },
+        enabled: !!selectedTicket?.id
     });
 
     const { data: categoriesData } = useQuery({
@@ -165,7 +179,23 @@ const TaskManagement = () => {
         queryFn: async () => {
             const response = await api.get('/employees');
             return response.data?.data || [];
-        }
+        },
+        enabled: canViewEmployeeDirectory
+    });
+
+    const {
+        data: hrmsAssignees = [],
+        isLoading: hrmsAssigneesLoading,
+        isError: hrmsAssigneesError
+    } = useQuery({
+        queryKey: ['hrms-assignees', hrmsAssigneeSearch],
+        queryFn: async () => {
+            const response = await api.get('/tickets/hrms-assignees', {
+                params: { search: hrmsAssigneeSearch.trim() }
+            });
+            return response.data?.data || [];
+        },
+        enabled: assignTab === 'hrms' && hrmsAssigneeSearch.trim().length >= 2
     });
 
     // Mutations
@@ -178,9 +208,9 @@ const TaskManagement = () => {
             toast.success('Ticket assigned successfully');
             setShowAssignModal(false);
             setTicketInitialAction(null);
-            setAssignForm({ assigned_to: [], notes: '' });
+            setAssignForm({ assigned_to: [], hrms_assignees: [], external_assignees: [], notes: '' });
             queryClient.invalidateQueries(['tickets']);
-            queryClient.invalidateQueries(['ticket-audience-counts']);
+            queryClient.invalidateQueries(['ticket-source-counts']);
             if (selectedTicket) queryClient.invalidateQueries(['ticket', selectedTicket.id]);
         },
         onError: (err) => toast.error(err.response?.data?.message || 'Failed to assign ticket')
@@ -194,7 +224,7 @@ const TaskManagement = () => {
         onSuccess: () => {
             toast.success('Assignee removed');
             queryClient.invalidateQueries(['tickets']);
-            queryClient.invalidateQueries(['ticket-audience-counts']);
+            queryClient.invalidateQueries(['ticket-source-counts']);
             if (selectedTicket) queryClient.invalidateQueries(['ticket', selectedTicket.id]);
         },
         onError: (err) => toast.error(err.response?.data?.message || 'Failed to remove assignee')
@@ -210,7 +240,7 @@ const TaskManagement = () => {
             setShowStatusModal(false);
             setStatusForm({ status: '', notes: '' });
             queryClient.invalidateQueries(['tickets']);
-            queryClient.invalidateQueries(['ticket-audience-counts']);
+            queryClient.invalidateQueries(['ticket-source-counts']);
             if (selectedTicket) queryClient.invalidateQueries(['ticket', selectedTicket.id]);
         },
         onError: (err) => toast.error(err.response?.data?.message || 'Failed to update status')
@@ -230,18 +260,38 @@ const TaskManagement = () => {
         onError: (err) => toast.error(err.response?.data?.message || 'Failed to add comment')
     });
 
+    const approvalMutation = useMutation({
+        mutationFn: async ({ ticketId, decision, notes }) => {
+            const response = await api.post(`/tickets/${ticketId}/approval-decision`, { decision, notes });
+            return response.data;
+        },
+        onSuccess: (_, variables) => {
+            toast.success(variables.decision === 'approved' ? 'Approval recorded' : 'Complaint rejected');
+            queryClient.invalidateQueries(['tickets']);
+            queryClient.invalidateQueries(['ticket', variables.ticketId]);
+            queryClient.invalidateQueries(['ticket-approvals', variables.ticketId]);
+            queryClient.invalidateQueries(['ticket-source-counts']);
+        },
+        onError: (error) => toast.error(error.response?.data?.message || 'Unable to submit approval decision')
+    });
+
     // Filter Logic
     const allTickets = ticketsData?.data || [];
-    const audienceTickets = allTickets.filter(ticket => matchesRequesterAudience(ticket, requesterAudience));
+    const sourceTickets = allTickets;
 
     const getTabCount = (tab) => {
+        if (isWorker) return sourceTickets.length;
         const statuses = getStatusesForTab(tab);
-        return audienceTickets.filter(ticket => statuses.includes(ticket.status)).length;
+        return sourceTickets.filter((ticket) =>
+            statuses.includes(ticket.status) ||
+            (tab === approvalTab && ticket.approval?.state === 'pending' && ticket.approval.can_act)
+        ).length;
     };
 
-    const filteredTickets = audienceTickets.filter(ticket => {
+    const filteredTickets = sourceTickets.filter(ticket => {
         const statuses = getStatusesForTab(activeTab);
-        const matchesStatus = statuses.includes(ticket.status);
+        const matchesStatus = isWorker || statuses.includes(ticket.status) ||
+            (activeTab === approvalTab && ticket.approval?.state === 'pending' && ticket.approval.can_act);
         const matchesCategory = filters.category_id ? ticket.category_id === parseInt(filters.category_id) : true;
         const matchesSearch = filters.search ?
             ticket.title.toLowerCase().includes(filters.search.toLowerCase()) ||
@@ -280,22 +330,23 @@ const TaskManagement = () => {
         String(first.name || '').localeCompare(String(second.name || ''))
     );
     const managersList = orderAssignees(
-        employeesData?.filter((employee) => employee.legacy_role !== 'worker' && employee.role !== 'worker') || []
+        employeesData?.filter((employee) => employee.role === 'manager') || []
     );
     const workersList = orderAssignees(
         employeesData?.filter((employee) => employee.legacy_role === 'worker' || employee.role === 'worker') || []
     );
     const prioritizedTickets = [...filteredTickets].sort((first, second) => {
         const getPriority = (ticket) => {
+            if (ticket.approval?.state === 'pending' && ticket.approval.can_act) return 0;
             const assignedToCurrentUser = ticket.assignments?.some((assignment) =>
                 currentUserId != null &&
                 String(assignment.assigned_to) === String(currentUserId) &&
                 assignment.is_active !== false
             );
-            if (assignedToCurrentUser) return 0;
-            if (ticket.sub_category_id != null && currentSubcategories.includes(String(ticket.sub_category_id))) return 1;
-            if (ticket.category_id != null && currentCategories.includes(String(ticket.category_id))) return 2;
-            return 3;
+            if (assignedToCurrentUser) return 1;
+            if (ticket.sub_category_id != null && currentSubcategories.includes(String(ticket.sub_category_id))) return 2;
+            if (ticket.category_id != null && currentCategories.includes(String(ticket.category_id))) return 3;
+            return 4;
         };
         return getPriority(first) - getPriority(second);
     });
@@ -316,7 +367,22 @@ const TaskManagement = () => {
         setSelectedTicket(ticket);
         setTicketInitialAction(null);
         setStatusForm({ status: ticket.status, notes: '' });
-        setAssignForm({ assigned_to: ticket.assignments?.map((assignment) => assignment.assigned_to) || [], notes: '' });
+        setHrmsAssigneeSearch('');
+        const assignments = ticket.assignments || [];
+        setAssignForm({
+            assigned_to: assignments.map((assignment) => assignment.assigned_to).filter(Boolean),
+            hrms_assignees: assignments.filter((assignment) => assignment.assignment_type === 'hrms').map((assignment) => ({
+                hrms_id: assignment.assigned_to_hrms_id,
+                employee_no: assignment.assigned_to_identifier,
+                name: assignment.assigned_to_name,
+                phone: assignment.assigned_to_phone
+            })),
+            external_assignees: assignments.filter((assignment) => assignment.assignment_type === 'external').map((assignment) => ({
+                name: assignment.assigned_to_name,
+                phone: assignment.assigned_to_phone
+            })),
+            notes: ''
+        });
         setCommentForm({ comment_text: '', is_internal: false });
     };
 
@@ -324,6 +390,7 @@ const TaskManagement = () => {
     const openAssignmentEditor = (ticket) => {
         openTicketDetails(ticket);
         setAssignTab('managers');
+        setHrmsAssigneeSearch('');
         setTicketInitialAction('assign');
     };
 
@@ -349,7 +416,7 @@ const TaskManagement = () => {
                             type="button"
                             onClick={() => setActiveTab('pending')}
                             className={`admin-tab-btn ${activeTab === 'pending' ? 'active-pending' : ''}`}
-                            hidden={!allowedTabs.includes('pending')}
+                            hidden={isWorker || !allowedTabs.includes('pending')}
                         >
                             <Clock size={16} /> Pending
                             <span className="admin-tab-count">{getTabCount('pending')}</span>
@@ -360,14 +427,14 @@ const TaskManagement = () => {
                             className={`admin-tab-btn ${activeTab === 'assigned' ? 'active-assigned' : ''}`}
                             hidden={!allowedTabs.includes('assigned')}
                         >
-                            <UserPlus size={16} /> Assigned / In Progress
+                            <UserPlus size={16} /> {isWorker ? 'All Assigned' : 'Assigned / In Progress'}
                             <span className="admin-tab-count">{getTabCount('assigned')}</span>
                         </button>
                         <button
                             type="button"
                             onClick={() => setActiveTab('resolved')}
                             className={`admin-tab-btn ${activeTab === 'resolved' ? 'active-resolved' : ''}`}
-                            hidden={!allowedTabs.includes('resolved')}
+                            hidden={isWorker || !allowedTabs.includes('resolved')}
                         >
                             <CheckCircle size={16} /> Resolved
                             <span className="admin-tab-count">{getTabCount('resolved')}</span>
@@ -405,24 +472,26 @@ const TaskManagement = () => {
                                 ))}
                             </select>
                         </div>
-                        <div className="admin-audience-selector" role="tablist" aria-label="Filter complaints by requester">
-                            {REQUESTER_AUDIENCES.filter(({ id }) => allowedAudiences.includes(id)).map(({ id, label, icon: Icon }) => (
+                        {!isWorker && (
+                            <div className="admin-audience-selector" role="tablist" aria-label="Filter complaints by source system">
+                                {allowedSources.map(({ id, label, icon: Icon }) => (
                                 <button
                                     key={id}
                                     type="button"
                                     role="tab"
-                                    aria-selected={requesterAudience === id}
-                                    onClick={() => setRequesterAudience(id)}
-                                    className={`admin-audience-btn ${requesterAudience === id ? 'active' : ''}`}
+                                    aria-selected={referenceSite === id}
+                                    onClick={() => setReferenceSite(id)}
+                                    className={`admin-audience-btn ${referenceSite === id ? 'active' : ''}`}
                                 >
-                                    <Icon size={17} />
+                                    {React.createElement(Icon, { size: 17 })}
                                     <span>{label}</span>
                                     <span className="admin-audience-count">
-                                        {audienceCounts?.[id] ?? 0}
+                                        {sourceCounts?.[id] ?? 0}
                                     </span>
                                 </button>
-                            ))}
-                        </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -433,7 +502,8 @@ const TaskManagement = () => {
                             <tr>
                                 <th>Ref #</th>
                                 <th>Title</th>
-                                <th>{requesterAudience === 'faculty' ? 'Faculty' : 'Student'}</th>
+                                <th>{!isWorker && referenceSite === 'HRMS' ? 'Faculty' : 'Requester'}</th>
+                                <th>Reference Site</th>
                                 <th>Category</th>
                                 <th>Status</th>
                                 <th>Actions</th>
@@ -452,10 +522,11 @@ const TaskManagement = () => {
                                     const matchesCategory = ticket.category_id != null &&
                                         currentCategories.includes(String(ticket.category_id));
                                     const hasScopeMatch = matchesSubcategory || matchesCategory;
+                                    const canApprove = ticket.approval?.state === 'pending' && ticket.approval.can_act;
                                     return (
                                     <tr
                                         key={ticket.id}
-                                        className={`admin-table-row-clickable ${assignedToCurrentUser ? 'ticket-priority-assigned' : hasScopeMatch ? 'ticket-priority-scoped' : ''}`}
+                                        className={`admin-table-row-clickable ${canApprove ? 'ticket-priority-approval' : assignedToCurrentUser ? 'ticket-priority-assigned' : hasScopeMatch ? 'ticket-priority-scoped' : ''}`}
                                         onClick={() => openTicketDetails(ticket)}
                                     >
                                         <td>
@@ -473,12 +544,24 @@ const TaskManagement = () => {
                                                             : 'Your category'}
                                                 </span>
                                             )}
+                                            {ticket.approval?.state === 'pending' && (
+                                                <span className={`ticket-priority-badge ${canApprove ? 'is-approval' : ''}`}>
+                                                    {canApprove
+                                                        ? `Your approval · ${ticket.approval.current_stage_name}`
+                                                        : `Approval · ${ticket.approval.current_stage_name}`}
+                                                </span>
+                                            )}
                                         </td>
                                         <td>
                                             <div className="text-sm font-medium text-gray-900">{getRequesterLabel(ticket)}</div>
-                                            {requesterAudience === 'student' && ticket.admission_number && (
+                                            {(isWorker || referenceSite !== 'HRMS') && ticket.admission_number && (
                                                 <div className="text-xs text-gray-500 mt-0.5">{ticket.admission_number}</div>
                                             )}
+                                        </td>
+                                        <td>
+                                            <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
+                                                {ticket.reference_site || 'Unassigned'}
+                                            </span>
                                         </td>
                                         <td>
                                             <span className="px-2.5 py-1 bg-gray-100 text-gray-700 text-xs font-medium rounded-md border border-gray-200">
@@ -492,12 +575,14 @@ const TaskManagement = () => {
                                         </td>
                                         <td onClick={(e) => e.stopPropagation()}>
                                             <div className="flex items-center gap-2">
-                                                <button onClick={() => openTicketDetails(ticket)} className="p-2 text-blue-600  rounded-lg transition-colors border border-transparent " title="View Details">
+                                                <button onClick={() => openTicketDetails(ticket)} className="p-2 text-gray-500 rounded-lg transition-colors border border-transparent" title="View Details">
                                                     <Eye size={18} />
                                                 </button>
-                                                <button onClick={() => openAssignmentEditor(ticket)} className="p-2 text-green-600  rounded-lg transition-colors border border-transparent " title="Assign">
-                                                    <UserPlus size={18} />
-                                                </button>
+                                                {!isWorker && (
+                                                    <button onClick={() => openAssignmentEditor(ticket)} disabled={ticket.approval?.state === 'pending'} className="p-2 text-green-600 rounded-lg border border-transparent disabled:cursor-not-allowed disabled:opacity-40" title={ticket.approval?.state === 'pending' ? 'Approval must finish before assignment' : 'Assign'}>
+                                                        <UserPlus size={18} />
+                                                    </button>
+                                                )}
                                                 <button onClick={() => openStatusEditor(ticket)} className="p-2 text-purple-600  rounded-lg transition-colors border border-transparent " title="Update Status">
                                                     <Edit size={18} />
                                                 </button>
@@ -508,13 +593,17 @@ const TaskManagement = () => {
                                 })
                             ) : (
                                 <tr>
-                                    <td colSpan="6" style={{ padding: '4rem 0', textAlign: 'center' }}>
+                                    <td colSpan="7" style={{ padding: '4rem 0', textAlign: 'center' }}>
                                         <div className="flex flex-col items-center justify-center text-gray-500">
                                             <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
                                                 <Ticket size={32} className="text-gray-300" />
                                             </div>
-                                            <p className="text-lg font-medium text-gray-900">No {requesterAudience} requests found</p>
-                                            <p className="text-sm mt-1">Try another tab, audience, or adjust your filters</p>
+                                            <p className="text-lg font-medium text-gray-900">
+                                                No {isWorker ? 'assigned complaints' : selectedSource?.label || 'complaints'} found
+                                            </p>
+                                            <p className="text-sm mt-1">
+                                                {isWorker ? 'Complaints assigned to you will appear here.' : 'Try another source tab or adjust your filters'}
+                                            </p>
                                         </div>
                                     </td>
                                 </tr>
@@ -527,9 +616,11 @@ const TaskManagement = () => {
             {/* Modals */}
             {selectedTicket && (
                 <TicketDetailsModal
+                    key={`${selectedTicket.id}-${ticketInitialAction || 'view'}-${ticketApproval?.state || 'none'}`}
                     ticket={ticketDetails || selectedTicket}
                     isLoading={ticketDetailsLoading && !ticketDetails}
                     initialAction={ticketInitialAction}
+                    canManageAssignments={!isWorker}
                     onClose={() => {
                         setSelectedTicket(null);
                         setTicketInitialAction(null);
@@ -543,10 +634,18 @@ const TaskManagement = () => {
                     onStatusSubmit={handleStatusUpdate}
                     statusUpdating={statusMutation.isPending}
                     assignForm={assignForm}
+                    setAssignForm={setAssignForm}
                     managersList={managersList}
                     workersList={workersList}
+                    hrmsEmployees={hrmsAssignees}
+                    hrmsEmployeesLoading={hrmsAssigneesLoading}
+                    hrmsEmployeesError={hrmsAssigneesError}
+                    onHrmsSearchChange={setHrmsAssigneeSearch}
                     assignTab={assignTab}
-                    onAssignTabChange={setAssignTab}
+                    onAssignTabChange={(tab) => {
+                        setAssignTab(tab);
+                        setHrmsAssigneeSearch('');
+                    }}
                     onAssignToggle={(userId) => {
                         const selected = assignForm.assigned_to.includes(userId);
                         setAssignForm({
@@ -565,6 +664,19 @@ const TaskManagement = () => {
                         commentMutation.mutate({ ticketId: selectedTicket.id, data: commentForm });
                     }}
                     commentSaving={commentMutation.isPending}
+                    approvalData={ticketApproval}
+                    approvalLoading={ticketApprovalLoading}
+                    approvalSaving={approvalMutation.isPending}
+                    onApprovalDecision={({ decision, notes }) => {
+                        if (decision === 'rejected' && !notes.trim()) {
+                            return toast.error('Enter a reason before rejecting');
+                        }
+                        approvalMutation.mutate({
+                            ticketId: selectedTicket.id,
+                            decision,
+                            notes
+                        });
+                    }}
                 />
             )}
 
@@ -768,7 +880,7 @@ const TaskManagement = () => {
                                 >
                                     <option value="">Select Status</option>
                                     {Object.entries(STATUS_LABELS)
-                                        .filter(([k]) => k !== 'closed')
+                                        .filter(([k]) => k !== 'closed' && k !== 'rejected')
                                         .map(([k, v]) => (
                                             <option key={k} value={k}>{v}</option>
                                         ))}

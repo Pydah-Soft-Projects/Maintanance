@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import api from '../../config/api';
 import toast from 'react-hot-toast';
+import useAuthStore from '../../store/authStore';
 import { compressTicketPhoto, MAX_TICKET_PHOTO_BYTES } from '../../utils/ticketPhoto';
 import { SkeletonBox } from '../../components/SkeletonLoader';
 import '../../styles/student-pages.css';
@@ -26,8 +27,15 @@ const DEFAULT_COLLEGES = [
 const RaiseTicket = () => {
     const navigate = useNavigate();
     const queryClient = useQueryClient();
+    const authUser = useAuthStore((state) => state.user);
+    const isStudentRequester = authUser?.role === 'student' || authUser?.admission_number || authUser?.admissionNumber;
+    const defaultReferenceSite = isStudentRequester ? 'SDMS' : 'HRMS';
+    const referenceSiteOptions = isStudentRequester
+        ? [{ value: 'SDMS', label: 'SDMS · Student' }, { value: 'HMS', label: 'HMS · Hostel' }]
+        : [{ value: 'HRMS', label: 'HRMS · Faculty' }];
 
     const [formData, setFormData] = useState({
+        reference_site: defaultReferenceSite,
         category_id: '',
         sub_category_id: '',
         college_id: '',
@@ -119,6 +127,7 @@ const RaiseTicket = () => {
     const createMutation = useMutation({
         mutationFn: async (formDataToSend) => {
             const formDataObj = new FormData();
+            formDataObj.append('reference_site', formDataToSend.reference_site);
             formDataObj.append('category_id', formDataToSend.category_id);
             if (formDataToSend.sub_category_id) {
                 formDataObj.append('sub_category_id', formDataToSend.sub_category_id);
@@ -157,6 +166,7 @@ const RaiseTicket = () => {
             queryClient.invalidateQueries(['student-tickets']);
             queryClient.invalidateQueries(['student-stats']);
             setFormData({
+                reference_site: defaultReferenceSite,
                 category_id: '',
                 sub_category_id: '',
                 college_id: '',
@@ -262,6 +272,22 @@ const RaiseTicket = () => {
                                     ))}
                                 </select>
                             </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                                Reference Site
+                            </label>
+                            <select
+                                value={formData.reference_site}
+                                onChange={(e) => setFormData({ ...formData, reference_site: e.target.value })}
+                                className="w-full px-3.5 py-2.5 bg-slate-50/70 focus:bg-white border border-slate-200 focus:border-sky-500 focus:ring-3 focus:ring-sky-500/10 rounded-xl text-sm font-medium text-slate-800 transition-all outline-none"
+                            >
+                                {referenceSiteOptions.map(({ value, label }) => (
+                                    <option key={value} value={value}>{label}</option>
+                                ))}
+                            </select>
+                            <p className="mt-1 text-xs text-slate-500">Choose the system this complaint belongs to.</p>
                         </div>
 
                         {/* Location Details Section Card */}

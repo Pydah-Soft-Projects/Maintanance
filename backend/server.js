@@ -44,6 +44,7 @@ const employeeRoutes = require('./routes/employeeRoutes');
 const pushRoutes = require('./routes/pushRoutes');
 const roleRoutes = require('./routes/roleRoutes');
 const collegeRoutes = require('./routes/collegeRoutes');
+const approvalWorkflowRoutes = require('./routes/approvalWorkflowRoutes');
 
 app.use('/api/tickets', ticketRoutes);
 app.use('/api/complaint-categories', complaintCategoryRoutes);
@@ -53,6 +54,7 @@ app.use('/api/employees', employeeRoutes);
 app.use('/api/push', pushRoutes);
 app.use('/api/roles', roleRoutes);
 app.use('/api/colleges', collegeRoutes);
+app.use('/api/approval-workflows', approvalWorkflowRoutes);
 
 // Health Check
 app.get('/health', (req, res) => {

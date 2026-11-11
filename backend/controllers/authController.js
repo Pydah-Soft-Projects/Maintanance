@@ -31,13 +31,13 @@ const buildUserResponse = (row) => ({
     phone: row.phone,
     role: row.role,
     collegeId: row.college_id,
-    permissions: ['admin', 'super_admin'].includes(row.role) ? SUPER_ADMIN_PERMISSIONS : parseJson(row.permissions),
+    permissions: row.role === 'super_admin' ? SUPER_ADMIN_PERMISSIONS : parseJson(row.permissions),
     isActive: row.is_active,
     ...(row.hrms_id ? { hrmsId: row.hrms_id, is_hrms_user: true } : {})
 });
 
 const attachTicketAccess = async (payload) => {
-    if (['admin', 'super_admin'].includes(payload.role)) {
+    if (payload.role === 'super_admin') {
         return { ...payload, ticketAccess: 'manage', permissions: SUPER_ADMIN_PERMISSIONS };
     }
     if (payload.role === 'student') return { ...payload, ticketAccess: 'request' };

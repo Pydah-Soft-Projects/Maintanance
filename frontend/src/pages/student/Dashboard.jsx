@@ -110,13 +110,15 @@ const Dashboard = () => {
 
                                     <div className="shrink-0">
                                         <span className={`status-badge ${
-                                            ['completed', 'closed'].includes(ticket.status)
+                                            ticket.status === 'rejected'
+                                                ? 'status-rejected'
+                                                : ['completed', 'closed'].includes(ticket.status)
                                                 ? 'status-completed'
                                                 : ['approaching', 'resolving'].includes(ticket.status)
                                                     ? 'status-active'
                                                     : 'status-pending'
                                         }`}>
-                                            {ticket.status}
+                                            {ticket.status === 'rejected' ? 'Rejected' : ticket.status}
                                         </span>
                                     </div>
                                 </div>

@@ -9,26 +9,38 @@ Migrations are used to manage database schema changes in a version-controlled ma
 ## Migration Files
 
 - **`001_create_employees_table.js`** - Creates the `ticket_employees` table for managing ticket-specific employee assignments
+- **`013_approval_workflows.js`** - Creates configurable approval-flow tables and seeds manager/worker service groups
+- **`014_role_based_approval_stages.js`** - Supports role-based approval stages across all service types for that role
+- **`015_consolidate_maintenance_roles.js`** - Consolidates maintenance employees into Worker, Manager, Sub-admin, and Superadmin
+- **`016_expand_approval_approver_roles.js`** - Adds Sub-admin and Superadmin as approval stage roles
+- **`017_add_complaint_reference_site.js`** - Stores the SDMS, HMS, or HRMS source for each complaint
 
-## How It Works
+Migration 017 backfills existing student complaints to SDMS and staff complaints to HRMS because older records do not retain source provenance. New student complaints default to SDMS and can be marked HMS for hostel requests; staff complaints default to HRMS. External integrations should send `reference_site` when creating a complaint.
 
-### Automatic Migrations
-Migrations run automatically when the server starts. The system:
-1. Checks for pending migrations
-2. Executes them in order
-3. Tracks which migrations have been run in the `migrations` table
+## Approval Workflow Schema
 
-### Manual Migration Commands
+The canonical SQL setup script, `backend/database/create_maintenance_db_tables.sql`, creates the approval workflow tables and seeds the sample Manager/Worker service groups. Run this script against `maintenance_db` when creating a database or when adding the approval schema to an existing database. It uses `CREATE TABLE IF NOT EXISTS` and `INSERT IGNORE`, so it can be re-run without replacing existing workflow data.
 
-You can also run migrations manually:
+For an existing database with approval tables, run `backend/database/014_role_based_approval_stages.sql` once to add role-based stage support, or run the migration runner. Approval stages can select Manager, Worker, Sub-admin, or Superadmin; approvers are snapshotted from active HRMS-linked users for the selected role. Workers must be assigned to an active Worker service type. Existing complaint approval snapshots are not changed.
+
+After the role consolidation, to allow Sub-admin and Superadmin stages on an existing database with role-based stages, run `backend/database/017_expand_approval_approver_roles.sql` once, or run `npm run migrate` to apply migration 016. Flows can be configured before approvers exist; assign eligible users before complaints need approval.
+
+Existing complaints are not backfilled. The app expects the approval schema to exist before using Approval setup.
+
+Manager and Worker approver roles also use the shared `roles` table used by User Management and Role Management. For an existing database, run `backend/database/015_sync_approval_roles.sql` to ensure both roles are active and visible in those screens. The user-role selector and role list load from `/api/roles`.
+
+For an existing database that already has the approval workflow tables and role-based stage columns, run `backend/database/016_consolidate_maintenance_roles.sql` once, or use `npm run migrate` to apply migration 015. This maps legacy admin accounts to Sub-admin, maps legacy `staff` and Manager accounts to Manager, preserves Worker and Superadmin accounts, and maps other maintenance employee roles to Worker. It deactivates non-standard role records, moves configured approval stages to role-wide approvers, and retires Manager service groups; only Workers have service types. HRMS requester accounts and existing complaint approval snapshots are not changed. The migration clears per-user permission overrides so permissions come from the four standard roles. Run this consolidation before creating custom roles; afterward, Superadmins can create custom roles from Role Management.
+
+## Running Migrations
+
+Migrations are not run automatically when the server starts. The migration runner remains available for deployments that use versioned migrations:
 
 ```bash
-# Run all pending migrations
 npm run migrate
-
-# Rollback the last migration
 npm run migrate:rollback
 ```
+
+The approval schema is also represented by `013_approval_workflows.js` for use with this runner. Use either the SQL setup script or the migration runner to install it; do not roll back a migration on a database with live workflow data.
 
 ## Migration Structure
 
@@ -116,7 +128,7 @@ DROP TABLE IF EXISTS ticket_employees;
 DROP TABLE IF EXISTS migrations;
 ```
 
-Then restart the server to run all migrations fresh.
+Then recreate the database schema from the SQL setup scripts.
 
 ## Current Schema
 

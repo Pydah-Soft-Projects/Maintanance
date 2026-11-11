@@ -9,9 +9,9 @@ import {
     Clock,
     CheckCircle,
     CheckCircle2,
+    ThumbsUp,
     X,
     MessageSquare,
-    Star,
     Sparkles,
     MapPin,
     Building2,
@@ -22,6 +22,7 @@ import {
     AlertCircle,
     RefreshCw,
     HelpCircle,
+    XCircle,
     LayoutGrid,
     List,
     Activity,
@@ -32,6 +33,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import api from '../../config/api';
 import toast from 'react-hot-toast';
 import { resolveTicketPhotoUrl } from '../../utils/ticketPhoto';
+import { getFeedbackSatisfaction } from '../../utils/ticketFeedback';
 
 const STATUS_CONFIG = {
     pending: {
@@ -73,6 +75,14 @@ const STATUS_CONFIG = {
         borderAccent: 'border-l-slate-400',
         borderTopAccent: 'border-t-slate-400',
         countColor: 'bg-slate-100 text-slate-600'
+    },
+    rejected: {
+        label: 'Rejected',
+        bg: 'bg-red-50 text-red-700 border-red-200/80',
+        dot: 'bg-red-500',
+        borderAccent: 'border-l-red-500',
+        borderTopAccent: 'border-t-red-500',
+        countColor: 'bg-red-100 text-red-700'
     }
 };
 
@@ -80,7 +90,7 @@ const MyTickets = () => {
     const queryClient = useQueryClient();
     const [selectedTicket, setSelectedTicket] = useState(null);
     const [showFeedbackModal, setShowFeedbackModal] = useState(false);
-    const [feedbackForm, setFeedbackForm] = useState({ rating: 5, feedback_text: '' });
+    const [feedbackForm, setFeedbackForm] = useState({ satisfied: true });
     const [activeTab, setActiveTab] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('all');
@@ -113,10 +123,12 @@ const MyTickets = () => {
             const response = await api.post(`/tickets/${ticketId}/feedback`, data);
             return response.data;
         },
-        onSuccess: () => {
-            toast.success('Thank you! Feedback submitted successfully.');
+        onSuccess: (_response, variables) => {
+            toast.success(variables.data.satisfied
+                ? 'Thank you for confirming the resolution.'
+                : 'Feedback recorded. The ticket has been reopened.');
             setShowFeedbackModal(false);
-            setFeedbackForm({ rating: 5, feedback_text: '' });
+            setFeedbackForm({ satisfied: true });
             setSelectedTicket(null);
             queryClient.invalidateQueries(['student-tickets']);
             if (selectedTicket?.id) {
@@ -131,37 +143,9 @@ const MyTickets = () => {
     const tickets = ticketsData || [];
     const activeTicket = ticketDetails || selectedTicket;
 
-    const reopenMutation = useMutation({
-        mutationFn: async (ticketId) => {
-            const response = await api.put(`/tickets/${ticketId}/status`, {
-                status: 'pending',
-                notes: 'Reopened by requester (Resolution Not Satisfactory)'
-            });
-            return response.data;
-        },
-        onSuccess: () => {
-            toast.success('Ticket reopened. Our team has been notified.');
-            setSelectedTicket(null);
-            queryClient.invalidateQueries(['student-tickets']);
-            if (selectedTicket?.id) {
-                queryClient.invalidateQueries(['ticket', selectedTicket.id]);
-            }
-        },
-        onError: (error) => {
-            toast.error(error.response?.data?.message || 'Failed to reopen ticket');
-        }
-    });
-
-    const handleReopen = () => {
-        if (!selectedTicket) return;
-        if (window.confirm('Are you sure you want to reopen this ticket? The support team will re-investigate.')) {
-            reopenMutation.mutate(selectedTicket.id);
-        }
-    };
-
     const handleFeedbackSubmit = () => {
-        if (!feedbackForm.rating) {
-            toast.error('Please select a star rating');
+        if (!selectedTicket || typeof feedbackForm.satisfied !== 'boolean') {
+            toast.error('Please select whether you are satisfied with the resolution');
             return;
         }
         feedbackMutation.mutate({
@@ -191,6 +175,8 @@ const MyTickets = () => {
                     ? t.status === 'approaching' || t.status === 'resolving'
                     : activeTab === 'completed'
                     ? t.status === 'completed' || t.status === 'closed'
+                    : activeTab === 'rejected'
+                    ? t.status === 'rejected'
                     : true;
 
             const matchesCategory =
@@ -216,7 +202,8 @@ const MyTickets = () => {
             all: tickets.length,
             pending: tickets.filter((t) => t.status === 'pending').length,
             in_progress: tickets.filter((t) => t.status === 'approaching' || t.status === 'resolving').length,
-            completed: tickets.filter((t) => t.status === 'completed' || t.status === 'closed').length
+            completed: tickets.filter((t) => t.status === 'completed' || t.status === 'closed').length,
+            rejected: tickets.filter((t) => t.status === 'rejected').length
         };
     }, [tickets]);
 
@@ -259,7 +246,8 @@ const MyTickets = () => {
                             { id: 'all', label: 'All Tickets', count: counts.all, icon: Ticket },
                             { id: 'pending', label: 'Pending', count: counts.pending, icon: Clock, countColor: 'bg-amber-100 text-amber-800' },
                             { id: 'in_progress', label: 'In Progress', count: counts.in_progress, icon: Activity, countColor: 'bg-indigo-100 text-indigo-800' },
-                            { id: 'completed', label: 'Resolved', count: counts.completed, icon: CheckCircle2, countColor: 'bg-emerald-100 text-emerald-800' }
+                            { id: 'completed', label: 'Resolved', count: counts.completed, icon: CheckCircle2, countColor: 'bg-emerald-100 text-emerald-800' },
+                            { id: 'rejected', label: 'Rejected', count: counts.rejected, icon: XCircle, countColor: 'bg-red-100 text-red-800' }
                         ].map((tab) => {
                             const Icon = tab.icon;
                             const isActive = activeTab === tab.id;
@@ -447,8 +435,11 @@ const MyTickets = () => {
                                 </thead>
                                 <tbody className="divide-y divide-slate-100 text-xs sm:text-sm">
                                     {filteredTickets.map((t) => {
-                                        const isFeedbackGiven = t.feedback && t.feedback.id;
-                                        const effectiveStatus = isFeedbackGiven ? 'closed' : t.status;
+                                        const feedbackSatisfaction = getFeedbackSatisfaction(t.feedback);
+                                        const isFeedbackGiven = Boolean(t.feedback);
+                                        const canSubmitFeedback = t.status === 'completed'
+                                            && (!isFeedbackGiven || feedbackSatisfaction === false);
+                                        const effectiveStatus = t.status;
                                         const statusInfo = STATUS_CONFIG[effectiveStatus] || STATUS_CONFIG.pending;
 
                                         return (
@@ -513,23 +504,28 @@ const MyTickets = () => {
                                                             <Eye size={13} />
                                                             <span>Details</span>
                                                         </button>
-                                                        {t.status === 'completed' && !isFeedbackGiven && (
+                                                        {canSubmitFeedback && (
                                                             <button
                                                                 type="button"
                                                                 onClick={() => {
                                                                     setSelectedTicket(t);
+                                                                    setFeedbackForm({ satisfied: true });
                                                                     setShowFeedbackModal(true);
                                                                 }}
                                                                 className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-white bg-emerald-600  transition-colors shadow-2xs cursor-pointer"
                                                             >
-                                                                <Star size={13} />
-                                                                <span>Rate</span>
+                                                                <ThumbsUp size={13} />
+                                                                <span>Feedback</span>
                                                             </button>
                                                         )}
                                                         {isFeedbackGiven && (
-                                                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200">
-                                                                <CheckCircle size={13} />
-                                                                <span>{t.feedback.rating}★</span>
+                                                            <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold border ${
+                                                                feedbackSatisfaction === false
+                                                                    ? 'text-red-700 bg-red-50 border-red-200'
+                                                                    : 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                                                            }`}>
+                                                                {feedbackSatisfaction === false ? <XCircle size={13} /> : <CheckCircle size={13} />}
+                                                                <span>{feedbackSatisfaction === false ? 'Not satisfied' : 'Satisfied'}</span>
                                                             </span>
                                                         )}
                                                     </div>
@@ -545,8 +541,11 @@ const MyTickets = () => {
                     /* Responsive Card Grid (Cards Type) */
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 items-stretch">
                         {filteredTickets.map((t, index) => {
-                            const isFeedbackGiven = t.feedback && t.feedback.id;
-                            const effectiveStatus = isFeedbackGiven ? 'closed' : t.status;
+                            const feedbackSatisfaction = getFeedbackSatisfaction(t.feedback);
+                            const isFeedbackGiven = Boolean(t.feedback);
+                            const canSubmitFeedback = t.status === 'completed'
+                                && (!isFeedbackGiven || feedbackSatisfaction === false);
+                            const effectiveStatus = t.status;
                             const statusInfo = STATUS_CONFIG[effectiveStatus] || STATUS_CONFIG.pending;
 
                             return (
@@ -609,7 +608,7 @@ const MyTickets = () => {
                                         </div>
 
                                         {/* Location Chips */}
-                                        {(t.college_name || t.block_no || t.floor_no || t.room_no || t.assigned_to_name) && (
+                                        {(t.college_name || t.block_no || t.floor_no || t.room_no || t.assignments?.length > 0) && (
                                             <div className="flex flex-wrap items-center gap-1.5 pt-1 text-[11px]">
                                                 {t.college_name && (
                                                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-medium truncate max-w-full">
@@ -633,12 +632,13 @@ const MyTickets = () => {
                                                         R: {t.room_no}
                                                     </span>
                                                 )}
-                                                {t.assigned_to_name && (
-                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-100 font-medium">
+                                                {(t.assignments || []).map((assignment) => (
+                                                    <span key={assignment.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-100 font-medium">
                                                         <Wrench size={11} className="text-purple-400" />
-                                                        {t.assigned_to_name}
+                                                        {assignment.assigned_to_name || 'Assigned staff'}
+                                                        {assignment.assigned_to_phone ? ` · ${assignment.assigned_to_phone}` : ''}
                                                     </span>
-                                                )}
+                                                ))}
                                             </div>
                                         )}
                                     </div>
@@ -654,26 +654,31 @@ const MyTickets = () => {
                                             <span>Details</span>
                                         </button>
 
-                                        {/* Rate Resolution Button if completed and no feedback */}
-                                        {t.status === 'completed' && !isFeedbackGiven && (
+                                        {/* Request feedback after resolution */}
+                                        {canSubmitFeedback && (
                                             <button
                                                 type="button"
                                                 onClick={() => {
                                                     setSelectedTicket(t);
+                                                    setFeedbackForm({ satisfied: true });
                                                     setShowFeedbackModal(true);
                                                 }}
                                                 className="inline-flex items-center gap-1 py-2 px-3 rounded-xl text-xs font-semibold text-white bg-emerald-600  transition-colors shadow-2xs cursor-pointer whitespace-nowrap"
                                             >
-                                                <Star size={13} />
-                                                <span>Rate</span>
+                                                <ThumbsUp size={13} />
+                                                <span>Feedback</span>
                                             </button>
                                         )}
 
                                         {/* Already Reviewed Badge */}
                                         {isFeedbackGiven && (
-                                            <span className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200">
-                                                <CheckCircle size={13} />
-                                                <span>{t.feedback.rating}★</span>
+                                            <span className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold border ${
+                                                feedbackSatisfaction === false
+                                                    ? 'text-red-700 bg-red-50 border-red-200'
+                                                    : 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                                            }`}>
+                                                {feedbackSatisfaction === false ? <XCircle size={13} /> : <CheckCircle size={13} />}
+                                                <span>{feedbackSatisfaction === false ? 'Not satisfied' : 'Satisfied'}</span>
                                             </span>
                                         )}
                                     </div>
@@ -689,8 +694,10 @@ const MyTickets = () => {
                 <TicketDetailsModal
                     ticket={activeTicket}
                     onClose={() => setSelectedTicket(null)}
-                    onFeedback={() => setShowFeedbackModal(true)}
-                    onReopen={handleReopen}
+                    onFeedback={(satisfied) => {
+                        setFeedbackForm({ satisfied });
+                        setShowFeedbackModal(true);
+                    }}
                 />
             )}
 
@@ -720,6 +727,14 @@ const TicketStepper = ({ status }) => {
         { label: 'In Progress', value: 'resolving' },
         { label: 'Resolved', value: 'completed' }
     ];
+
+    if (status === 'rejected') {
+        return (
+            <div className="my-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                This complaint was rejected.
+            </div>
+        );
+    }
 
     const currentStepIndex =
         steps.findIndex((s) => s.value === status) === -1
@@ -772,7 +787,11 @@ const TicketStepper = ({ status }) => {
 };
 
 // Ticket Details Modal
-const TicketDetailsModal = ({ ticket, onClose, onFeedback, onReopen }) => {
+const TicketDetailsModal = ({ ticket, onClose, onFeedback }) => {
+    const feedbackSatisfaction = getFeedbackSatisfaction(ticket.feedback);
+    const canSubmitFeedback = ticket.status === 'completed'
+        && (!ticket.feedback || feedbackSatisfaction === false);
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs font-sans">
             <div className="absolute inset-0" onClick={onClose} />
@@ -840,6 +859,19 @@ const TicketDetailsModal = ({ ticket, onClose, onFeedback, onReopen }) => {
                             </span>
                         </div>
                     </div>
+                    {ticket.status === 'rejected' && ticket.status_history?.find((entry) => entry.new_status === 'rejected')?.notes && (
+                        <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+                            <span className="text-[10px] font-semibold uppercase tracking-wider text-red-700">Rejection reason</span>
+                            <p className="mt-1 text-sm text-red-800">
+                                {ticket.status_history.find((entry) => entry.new_status === 'rejected').notes}
+                            </p>
+                        </div>
+                    )}
+                    {ticket.approval?.state === 'pending' && (
+                        <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+                            Awaiting approval: {ticket.approval.current_stage_name || 'Review'}.
+                        </div>
+                    )}
 
                     {/* Subject */}
                     <div>
@@ -897,6 +929,35 @@ const TicketDetailsModal = ({ ticket, onClose, onFeedback, onReopen }) => {
                         </div>
                     </div>
 
+                    {ticket.assignments?.length > 0 && (
+                        <div className="rounded-xl border border-purple-100 bg-purple-50/60 p-4">
+                            <span className="mb-2 block text-[10px] font-semibold uppercase tracking-wider text-purple-700">
+                                Assigned to
+                            </span>
+                            <div className="space-y-2">
+                                {ticket.assignments.map((assignment) => (
+                                    <div key={assignment.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-purple-100 bg-white px-3 py-2">
+                                        <div>
+                                            <p className="text-sm font-semibold text-slate-800">{assignment.assigned_to_name || 'Assigned staff'}</p>
+                                            <p className="text-xs text-slate-500">
+                                                {assignment.assignment_type === 'hrms'
+                                                    ? 'HRMS employee'
+                                                    : assignment.assignment_type === 'external'
+                                                        ? 'External worker'
+                                                        : assignment.assigned_to_role || 'Assignee'}
+                                            </p>
+                                        </div>
+                                        {assignment.assigned_to_phone && (
+                                            <a className="text-sm font-medium text-purple-700" href={`tel:${assignment.assigned_to_phone}`}>
+                                                {assignment.assigned_to_phone}
+                                            </a>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     {/* Evidence Attachment */}
                     {(ticket.photo_url || ticket.has_photo) && (
                         <div>
@@ -916,50 +977,45 @@ const TicketDetailsModal = ({ ticket, onClose, onFeedback, onReopen }) => {
 
                     {/* Feedback details if existing */}
                     {ticket.feedback && (
-                        <div className="bg-emerald-50/70 p-4 rounded-xl border border-emerald-200/80 space-y-2">
+                        <div className={`p-4 rounded-xl border space-y-2 ${
+                            feedbackSatisfaction === false
+                                ? 'bg-red-50/70 border-red-200/80'
+                                : 'bg-emerald-50/70 border-emerald-200/80'
+                        }`}>
                             <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-800">
+                                <div className={`flex items-center gap-1.5 text-xs font-semibold ${
+                                    feedbackSatisfaction === false ? 'text-red-800' : 'text-emerald-800'
+                                }`}>
                                     <MessageSquare size={14} />
                                     <span>Requester Feedback</span>
                                 </div>
-                                <div className="flex items-center gap-1 text-amber-500">
-                                    {[1, 2, 3, 4, 5].map((star) => (
-                                        <Star
-                                            key={star}
-                                            size={16}
-                                            fill={star <= ticket.feedback.rating ? 'currentColor' : 'none'}
-                                        />
-                                    ))}
-                                    <span className="text-xs font-semibold text-emerald-900 ml-1">
-                                        {ticket.feedback.rating}/5
-                                    </span>
+                                <div className={`inline-flex items-center gap-1.5 text-xs font-semibold ${
+                                    feedbackSatisfaction === false ? 'text-red-800' : 'text-emerald-900'
+                                }`}>
+                                    {feedbackSatisfaction === false ? <XCircle size={15} /> : <CheckCircle size={15} />}
+                                    <span>{feedbackSatisfaction === false ? 'Not satisfied' : 'Satisfied'}</span>
                                 </div>
                             </div>
-                            {ticket.feedback.feedback_text && (
-                                <p className="text-xs text-emerald-900 leading-relaxed">
-                                    "{ticket.feedback.feedback_text}"
-                                </p>
-                            )}
                         </div>
                     )}
                 </div>
 
                 {/* Modal Footer */}
                 <div className="px-6 py-4 border-t border-slate-200/80 bg-slate-50/50 flex flex-wrap items-center justify-between gap-3">
-                    {ticket.status === 'completed' && !ticket.feedback && (
+                    {canSubmitFeedback && (
                         <div className="flex items-center gap-2 w-full sm:w-auto">
-                            <span className="text-xs font-medium text-slate-600">Satisfied with the fix?</span>
+                            <span className="text-xs font-medium text-slate-600">Was the issue resolved?</span>
                             <button
-                                onClick={onReopen}
+                                onClick={() => onFeedback(false)}
                                 className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-red-200 text-red-600 bg-red-50  transition-colors"
                             >
-                                Not Satisfied (Reopen)
+                                Not satisfied
                             </button>
                             <button
-                                onClick={onFeedback}
+                                onClick={() => onFeedback(true)}
                                 className="px-3.5 py-1.5 text-xs font-semibold rounded-lg text-white bg-emerald-600  transition-colors"
                             >
-                                Satisfied (Rate)
+                                Satisfied
                             </button>
                         </div>
                     )}
@@ -991,42 +1047,39 @@ const FeedbackModal = ({ ticket, form, setForm, onClose, onSubmit, loading }) =>
                     <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 mx-auto flex items-center justify-center mb-3">
                         <CheckCircle size={24} />
                     </div>
-                    <h3 className="text-lg font-semibold text-slate-800">Rate Resolution</h3>
+                    <h3 className="text-lg font-semibold text-slate-800">Resolution Feedback</h3>
                     <p className="text-xs text-slate-500">
-                        How was your support experience for ticket #{ticket.ticket_number || ticket.id}?
+                        Were you satisfied with the resolution for ticket #{ticket.ticket_number || ticket.id}?
                     </p>
                 </div>
 
-                {/* Star rating */}
-                <div className="flex justify-center items-center gap-2 py-2">
-                    {[1, 2, 3, 4, 5].map((rating) => (
-                        <button
-                            key={rating}
-                            type="button"
-                            onClick={() => setForm({ ...form, rating })}
-                            className="p-1  transition-transform"
-                        >
-                            <Star
-                                size={32}
-                                className={form.rating >= rating ? 'text-amber-400' : 'text-slate-200'}
-                                fill={form.rating >= rating ? 'currentColor' : 'none'}
-                            />
-                        </button>
-                    ))}
-                </div>
-
-                {/* Feedback comment */}
-                <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-700 block">
-                        Comments or feedback <span className="text-slate-400 font-normal">(Optional)</span>
-                    </label>
-                    <textarea
-                        rows={3}
-                        value={form.feedback_text}
-                        onChange={(e) => setForm({ ...form, feedback_text: e.target.value })}
-                        placeholder="Tell us what went well or what could be improved..."
-                        className="w-full p-3 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 outline-none focus:border-sky-500 bg-slate-50/70 focus:bg-white transition-colors resize-none"
-                    />
+                <div className="grid grid-cols-2 gap-3">
+                    <button
+                        type="button"
+                        onClick={() => setForm({ satisfied: false })}
+                        aria-pressed={form.satisfied === false}
+                        className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-3 text-sm font-semibold transition-colors ${
+                            form.satisfied === false
+                                ? 'border-red-300 bg-red-50 text-red-700'
+                                : 'border-slate-200 text-slate-600'
+                        }`}
+                    >
+                        <XCircle size={17} />
+                        Not satisfied
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setForm({ satisfied: true })}
+                        aria-pressed={form.satisfied === true}
+                        className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-3 text-sm font-semibold transition-colors ${
+                            form.satisfied === true
+                                ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                                : 'border-slate-200 text-slate-600'
+                        }`}
+                    >
+                        <CheckCircle size={17} />
+                        Satisfied
+                    </button>
                 </div>
 
                 {/* Actions */}
@@ -1041,10 +1094,10 @@ const FeedbackModal = ({ ticket, form, setForm, onClose, onSubmit, loading }) =>
                     <button
                         type="button"
                         onClick={onSubmit}
-                        disabled={loading || !form.rating}
+                        disabled={loading || typeof form.satisfied !== 'boolean'}
                         className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600   text-white text-xs font-semibold shadow-xs  transition-all disabled:opacity-50"
                     >
-                        {loading ? 'Submitting...' : 'Submit Rating'}
+                        {loading ? 'Submitting...' : 'Submit Feedback'}
                     </button>
                 </div>
             </motion.div>

@@ -3,8 +3,22 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#101827" />
+    <meta name="theme-color" content="#1A2517" />
     <title>Support &amp; Maintenance Portal</title>
+    <script>
+      (() => {
+        const isLocalHost = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
+        const themeServer = isLocalHost
+          ? 'http://localhost:7000'
+          : 'https://ui-theme.pydah.edu.in';
+        const loader = document.createElement('script');
+
+        loader.src = `${themeServer}/themes/theme-loader.js`;
+        loader.dataset.themeServer = themeServer;
+        loader.dataset.pollInterval = isLocalHost ? '10' : '30';
+        document.head.appendChild(loader);
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -12,7 +26,7 @@
       body {
         margin: 0;
         padding: 0;
-        background-color: #F8FAFC;
+        background-color: var(--background, #FAFAF5);
         font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       }
     </style>

@@ -67,23 +67,21 @@ export const TICKET_MODULE_LABELS = {
 // User Roles specific to Ticket App
 export const TICKET_USER_ROLES = {
     SUPER_ADMIN: 'super_admin',
-    ADMIN: 'admin',
     SUB_ADMIN: 'sub_admin',
-    STAFF: 'staff',      // Ticket Manager
-    WORKER: 'worker'     // Ticket Worker
+    MANAGER: 'manager',
+    WORKER: 'worker'
 };
 
 // Role Labels for UI display
 export const TICKET_ROLE_LABELS = {
-    [TICKET_USER_ROLES.SUPER_ADMIN]: 'Super Admin',
-    [TICKET_USER_ROLES.ADMIN]: 'Admin',
-    [TICKET_USER_ROLES.SUB_ADMIN]: 'Sub Admin',
-    [TICKET_USER_ROLES.STAFF]: 'Manager',
+    [TICKET_USER_ROLES.SUPER_ADMIN]: 'Superadmin',
+    [TICKET_USER_ROLES.SUB_ADMIN]: 'Sub-admin',
+    [TICKET_USER_ROLES.MANAGER]: 'Manager',
     [TICKET_USER_ROLES.WORKER]: 'Worker'
 };
 
 // Create default permissions (all false) for ticket modules
-export const createDefaultTicketPermissions = (role = 'sub_admin') => {
+export const createDefaultTicketPermissions = () => {
     const permissions = {};
     Object.keys(TICKET_MODULES).forEach(key => {
         const module = TICKET_MODULES[key];
@@ -145,7 +143,7 @@ export const hasTicketPermission = (permissions, module, action) => {
     return modulePerm[action] === true;
 };
 
-// Check if role has full access (super admin or admin)
+// Only the Superadmin role has unrestricted access.
 export const isTicketFullAccessRole = (role) => {
-    return role === TICKET_USER_ROLES.SUPER_ADMIN || role === TICKET_USER_ROLES.ADMIN;
+    return role === TICKET_USER_ROLES.SUPER_ADMIN;
 };

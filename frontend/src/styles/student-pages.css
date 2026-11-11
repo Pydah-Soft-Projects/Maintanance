@@ -4,18 +4,18 @@
 
 :root {
     --sdms-font: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    --sdms-bg: #F8FAFC;
-    --sdms-card-bg: #FFFFFF;
-    --sdms-border: #E2E8F0;
-    --sdms-border-subtle: #F1F5F9;
-    --sdms-text-main: #0F172A;
-    --sdms-text-muted: #000000;
-    --sdms-text-dim: #000000;
+    --sdms-bg: var(--background, #FAFAF5);
+    --sdms-card-bg: var(--surface, #FFFFFF);
+    --sdms-border: var(--border, #E5E7EB);
+    --sdms-border-subtle: var(--background, #FAFAF5);
+    --sdms-text-main: var(--text-primary, #333333);
+    --sdms-text-muted: var(--text-secondary, #555555);
+    --sdms-text-dim: var(--text-muted, #777777);
 
-    --sdms-primary: #0284C7;
-    --sdms-primary-hover: #0369A1;
-    --sdms-primary-light: #F0F9FF;
-    --sdms-primary-border: #BAE6FD;
+    --sdms-primary: var(--primary, #1A2517);
+    --sdms-primary-hover: var(--primary-hover, #11180F);
+    --sdms-primary-light: var(--primary-light, #E8EEE4);
+    --sdms-primary-border: var(--border-strong, #CBD5E1);
 
     --sdms-radius-sm: 0.5rem;
     --sdms-radius-md: 0.75rem;
@@ -53,7 +53,7 @@
     font-size: 1.5rem;
     line-height: 1.875rem;
     font-weight: 700;
-    color: #000000;
+    color: var(--text-primary, #333333);
     letter-spacing: -0.02em;
     font-family: var(--sdms-font) !important;
     margin: 0;
@@ -201,7 +201,7 @@
     height: 2.5rem;
     width: 2.5rem;
     border-radius: var(--sdms-radius-md);
-    background-color: #F0F9FF;
+    background-color: var(--primary-light, #E8EEE4);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -240,23 +240,29 @@
 
 .status-completed,
 .status-closed {
-    background-color: #F0FDF4;
-    color: #15803D;
-    border-color: #BBF7D0;
+    background-color: var(--success-light, #F0FDF4);
+    color: var(--success, #15803D);
+    border-color: var(--success-light, #F0FDF4);
+}
+
+.status-rejected {
+    background-color: var(--danger-light, #FEF2F2);
+    color: var(--danger, #B91C1C);
+    border-color: var(--danger-light, #FEF2F2);
 }
 
 .status-active,
 .status-resolving,
 .status-approaching {
-    background-color: #F0F9FF;
-    color: #0369A1;
-    border-color: #BAE6FD;
+    background-color: var(--primary-light, #E8EEE4);
+    color: var(--primary, #1A2517);
+    border-color: var(--primary-light, #E8EEE4);
 }
 
 .status-pending {
-    background-color: #FEFCE8;
-    color: #A16207;
-    border-color: #FEF08A;
+    background-color: var(--warning-light, #FEFCE8);
+    color: var(--warning, #A16207);
+    border-color: var(--warning-light, #FEFCE8);
 }
 
 /* Action Cards */
@@ -272,9 +278,9 @@
 }
 
 .action-card.primary {
-    background: linear-gradient(135deg, #0284C7 0%, #4F46E5 100%);
-    color: #FFFFFF;
-    box-shadow: 0 4px 12px -2px rgba(2, 132, 199, 0.25);
+    background: linear-gradient(135deg, var(--primary, #1A2517) 0%, var(--primary-hover, #11180F) 100%);
+    color: white;
+    box-shadow: 0 4px 12px -2px color-mix(in srgb, var(--primary, #1A2517) 25%, transparent);
 }
 
 .action-card.secondary {
@@ -290,15 +296,15 @@
     justify-content: center;
     gap: 0.5rem;
     padding: 0.625rem 1.25rem;
-    background: linear-gradient(135deg, #0284C7 0%, #4F46E5 100%);
-    color: #FFFFFF;
+    background: linear-gradient(135deg, var(--primary, #1A2517) 0%, var(--primary-hover, #11180F) 100%);
+    color: white;
     border-radius: var(--sdms-radius-md);
     font-size: 0.875rem;
     font-weight: 600;
     text-decoration: none;
     border: none;
     cursor: pointer;
-    box-shadow: 0 2px 4px rgba(2, 132, 199, 0.2);
+    box-shadow: 0 2px 4px color-mix(in srgb, var(--primary, #1A2517) 20%, transparent);
     transition: all 0.2s ease;
 }
 
@@ -347,7 +353,7 @@
     display: block;
     font-size: 0.75rem;
     font-weight: 600;
-    color: #000000;
+    color: var(--text-primary, #333333);
     text-transform: uppercase;
     letter-spacing: 0.04em;
     margin-bottom: 0.375rem;
@@ -358,8 +364,8 @@
 .form-textarea {
     width: 100%;
     padding: 0.625rem 0.875rem;
-    background-color: #F8FAFC;
-    border: 1px solid #CBD5E1;
+    background-color: var(--background, #FAFAF5);
+    border: 1px solid var(--border-strong, #CBD5E1);
     border-radius: var(--sdms-radius-md);
     font-size: 0.875rem;
     font-weight: 500;
@@ -372,21 +378,21 @@
 
 .form-input::placeholder,
 .form-textarea::placeholder {
-    color: #000000;
+    color: var(--text-primary, #333333);
     font-weight: 400;
 }
 
 .form-input:focus,
 .form-select:focus,
 .form-textarea:focus {
-    background-color: #FFFFFF;
+    background-color: var(--surface, #FFFFFF);
     border-color: var(--sdms-primary);
-    box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.12);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary, #1A2517) 12%, transparent);
 }
 
 /* Section Box (e.g. Location Details) */
 .section-box {
-    background-color: #F8FAFC;
+    background-color: var(--background, #FAFAF5);
     border: 1px solid var(--sdms-border);
     border-radius: var(--sdms-radius-lg);
     padding: 1.25rem;
@@ -399,7 +405,7 @@
     gap: 0.5rem;
     padding-bottom: 0.75rem;
     margin-bottom: 1rem;
-    border-bottom: 1px solid #E2E8F0;
+    border-bottom: 1px solid var(--border, #E5E7EB);
 }
 
 .section-title {
@@ -412,12 +418,12 @@
 
 /* Photo Upload Box */
 .photo-upload-box {
-    border: 2px dashed #CBD5E1;
+    border: 2px dashed var(--border-strong, #CBD5E1);
     border-radius: var(--sdms-radius-lg);
     padding: 1.75rem;
     text-align: center;
     cursor: pointer;
-    background-color: #F8FAFC;
+    background-color: var(--background, #FAFAF5);
     transition: all 0.2s ease;
 }
 
@@ -435,7 +441,7 @@
     width: 3.5rem;
     height: 3.5rem;
     border-radius: 1rem;
-    background-color: #F0F9FF;
+    background-color: var(--primary-light, #E8EEE4);
     color: var(--sdms-primary);
     display: flex;
     align-items: center;

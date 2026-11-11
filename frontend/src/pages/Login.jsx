@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { LogIn, Loader2, Eye, EyeOff, Users, Wrench, ClipboardCheck, CircleCheck } from 'lucide-react';
+import { motion as Motion } from 'framer-motion';
 import useAuthStore from '../store/authStore';
 import toast from 'react-hot-toast';
-
-import { motion } from 'framer-motion';
 
 const Login = ({ isStudent = false }) => {
     const navigate = useNavigate();
@@ -23,7 +22,7 @@ const Login = ({ isStudent = false }) => {
     useEffect(() => {
         if (isAuthenticated) {
             const currentUser = useAuthStore.getState().user;
-            if (currentUser?.role === 'super_admin' || currentUser?.role === 'admin') {
+            if (currentUser?.role === 'super_admin') {
                 navigate('/dashboard');
             } else if (userType === 'student' || userType === 'requester') {
                 navigate('/student/dashboard');
@@ -70,14 +69,14 @@ const Login = ({ isStudent = false }) => {
             <div aria-hidden="true" className="login-orb login-orb-two" />
 
             <section className="login-hero relative z-10 mx-auto hidden w-full max-w-xl lg:block">
-                <div className="mb-8 flex h-14 w-14 items-center justify-center rounded-2xl border border-white/15 bg-white/10 text-emerald-300 shadow-lg backdrop-blur">
+                <div className="mb-8 flex h-14 w-14 items-center justify-center rounded-2xl border border-white/15 bg-white/10 text-primary-light shadow-lg backdrop-blur">
                     <Wrench size={26} strokeWidth={1.8} />
                 </div>
-                <p className="mb-4 text-xs font-semibold uppercase tracking-[0.24em] text-emerald-300">
+                <p className="mb-4 text-xs font-semibold uppercase tracking-[0.24em] text-primary-light">
                     {isStudentLogin ? 'Student services' : 'Support & maintenance'}
                 </p>
                 <h1 className="max-w-lg text-5xl font-semibold leading-[1.12] tracking-tight text-white xl:text-6xl">
-                    A better way to keep things <span className="text-emerald-300">running.</span>
+                    A better way to keep things <span className="text-primary-light">running.</span>
                 </h1>
                 <p className="mt-5 max-w-md text-base leading-7 text-slate-300">
                     Submit a request, follow its progress, and get back to what matters.
@@ -88,17 +87,17 @@ const Login = ({ isStudent = false }) => {
                     <div className="login-ticket-card">
                         <div className="flex items-center justify-between">
                             <span className="flex items-center gap-2 text-sm font-medium text-white">
-                                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-400/15 text-emerald-300">
+                                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-light/15 text-primary-light">
                                     <ClipboardCheck size={17} />
                                 </span>
                                 Maintenance request
                             </span>
-                            <span className="rounded-full bg-emerald-400/15 px-2.5 py-1 text-[11px] font-medium text-emerald-300">In progress</span>
+                            <span className="rounded-full bg-primary-light/15 px-2.5 py-1 text-[11px] font-medium text-primary-light">In progress</span>
                         </div>
                         <div className="mt-6 h-2 w-4/5 rounded-full bg-white/15" />
                         <div className="mt-3 h-2 w-3/5 rounded-full bg-white/10" />
                         <div className="mt-6 flex items-center gap-2 text-xs text-slate-300">
-                            <CircleCheck size={15} className="text-emerald-300" />
+                            <CircleCheck size={15} className="text-primary-light" />
                             Your request is being taken care of
                         </div>
                     </div>
@@ -107,17 +106,17 @@ const Login = ({ isStudent = false }) => {
                 </div>
             </section>
 
-            <motion.div
+            <Motion.div
                 initial={{ opacity: 0, y: 20, scale: 0.97 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 transition={{ duration: 0.5, ease: "easeOut" }}
                 className="login-card relative z-10 mx-auto w-full max-w-md rounded-3xl p-6 shadow-2xl sm:p-10 lg:justify-self-end"
             >
                 <header className="mb-8 text-center">
-                    <div aria-hidden="true" className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#1A2517] text-emerald-300 shadow-lg shadow-[#1A2517]/20">
+                    <div aria-hidden="true" className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-light shadow-lg shadow-primary/20">
                         <Wrench size={25} strokeWidth={1.8} />
                     </div>
-                    <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#61734f]">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-text-secondary">
                         {isStudentLogin ? 'Student ' : ''}Support Portal
                     </p>
                     <h2 className="text-3xl font-bold tracking-tight text-gray-900">
@@ -135,7 +134,7 @@ const Login = ({ isStudent = false }) => {
                         </label>
                         <div className="group relative">
                             <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                                <Users className="h-5 w-5 text-gray-400 transition-colors group-focus-within:text-[#1A2517]" />
+                                <Users className="h-5 w-5 text-gray-400 transition-colors group-focus-within:text-primary" />
                             </div>
                             <input
                                 id="login-username"
@@ -144,7 +143,7 @@ const Login = ({ isStudent = false }) => {
                                 value={formData.username}
                                 onChange={handleChange}
                                 autoComplete="username"
-                                className="block w-full rounded-xl border border-gray-200 bg-white px-3 py-3 pl-10 text-base text-gray-900 placeholder-gray-400 transition-all focus:border-[#1A2517] focus:outline-none focus:ring-4 focus:ring-[#1A2517]/10"
+                                className="block w-full rounded-xl border border-gray-200 bg-surface px-3 py-3 pl-10 text-base text-gray-900 placeholder-gray-400 transition-all focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10"
                                 placeholder="Enter Username, Admission No, or Employee ID"
                                 disabled={loading}
                             />
@@ -157,7 +156,7 @@ const Login = ({ isStudent = false }) => {
                         </label>
                         <div className="group relative">
                             <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                                <LogIn className="h-5 w-5 text-gray-400 transition-colors group-focus-within:text-[#1A2517]" />
+                                <LogIn className="h-5 w-5 text-gray-400 transition-colors group-focus-within:text-primary" />
                             </div>
                             <input
                                 id="login-password"
@@ -166,7 +165,7 @@ const Login = ({ isStudent = false }) => {
                                 value={formData.password}
                                 onChange={handleChange}
                                 autoComplete="current-password"
-                                className="block w-full rounded-xl border border-gray-200 bg-white px-3 py-3 pl-10 pr-11 text-base text-gray-900 placeholder-gray-400 transition-all focus:border-[#1A2517] focus:outline-none focus:ring-4 focus:ring-[#1A2517]/10"
+                                className="block w-full rounded-xl border border-gray-200 bg-surface px-3 py-3 pl-10 pr-11 text-base text-gray-900 placeholder-gray-400 transition-all focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10"
                                 placeholder="Enter your password"
                                 disabled={loading}
                             />
@@ -184,7 +183,7 @@ const Login = ({ isStudent = false }) => {
                     <button
                         type="submit"
                         disabled={loading}
-                        className="flex w-full items-center justify-center rounded-xl bg-[#1A2517] px-4 py-3.5 text-sm font-semibold text-white shadow-lg shadow-[#1A2517]/20 transition-all   disabled:cursor-not-allowed disabled:opacity-70"
+                        className="flex w-full items-center justify-center rounded-xl bg-primary px-4 py-3.5 text-sm font-semibold text-white shadow-lg shadow-primary/20 transition-all   disabled:cursor-not-allowed disabled:opacity-70"
                     >
                         {loading ? (
                             <>
@@ -201,7 +200,7 @@ const Login = ({ isStudent = false }) => {
                     <button
                         type="button"
                         onClick={() => toast('Please contact administrator to reset password')}
-                        className="text-sm font-medium text-[#1A2517] transition-colors "
+                        className="text-sm font-medium text-primary transition-colors "
                     >
                         Forgot Password?
                     </button>
@@ -210,7 +209,7 @@ const Login = ({ isStudent = false }) => {
                 <footer className="mt-8 border-t border-gray-100 pt-5 text-center text-xs text-gray-400">
                     © {new Date().getFullYear()} Support &amp; Ticket Management System
                 </footer>
-            </motion.div>
+            </Motion.div>
         </main>
     );
 };

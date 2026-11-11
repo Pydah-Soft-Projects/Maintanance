@@ -242,7 +242,7 @@ const TicketConfiguration = () => {
                         </div>
                         <div className="modal-body">
                             {formData.parent_id && (
-                                <div style={{ padding: '0.75rem', backgroundColor: '#eff6ff', color: '#1e40af', borderRadius: '0.5rem', fontSize: '0.875rem' }}>
+                                <div style={{ padding: '0.75rem', backgroundColor: 'var(--primary-light, #E8EEE4)', color: 'var(--primary, #1A2517)', borderRadius: '0.5rem', fontSize: '0.875rem' }}>
                                     {editingHeader ? 'Under category:' : 'Adding under:'}{' '}
                                     <strong>{headers.find(h => h.id === formData.parent_id)?.name}</strong>
                                 </div>

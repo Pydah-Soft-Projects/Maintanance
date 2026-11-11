@@ -25,9 +25,9 @@
     border-radius: 6px;
     font-size: 0.75rem;
     font-weight: 600;
-    border: 1px solid #e2e8f0;
-    background: #ffffff;
-    color: #2563eb;
+    border: 1px solid var(--border, #E5E7EB);
+    background: var(--surface, #FFFFFF);
+    color: var(--primary, #1A2517);
     cursor: pointer;
     transition: all 0.15s;
 }
@@ -39,8 +39,8 @@
 }
 
 .permission-module-card {
-    background: #ffffff;
-    border: 1.5px solid #e2e8f0;
+    background: var(--surface, #FFFFFF);
+    border: 1.5px solid var(--border, #E5E7EB);
     border-radius: 12px;
     padding: 1rem 1.125rem;
     transition: all 0.2s ease;
@@ -49,8 +49,8 @@
 }
 
 .permission-module-card.has-access {
-    border-color: #10b981;
-    background: linear-gradient(180deg, #ffffff 0%, #f0fdf4 100%);
+    border-color: var(--success, #15803D);
+    background: linear-gradient(180deg, var(--surface, #FFFFFF) 0%, var(--success-light, #F0FDF4) 100%);
 }
 
 .module-header {
@@ -60,7 +60,7 @@
     gap: 0.75rem;
     margin-bottom: 0.875rem;
     padding-bottom: 0.75rem;
-    border-bottom: 1px solid #f1f5f9;
+    border-bottom: 1px solid var(--border, #E5E7EB);
 }
 
 .module-title-wrap {
@@ -76,19 +76,19 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #f1f5f9;
+    background: var(--background, #FAFAF5);
     border-radius: 6px;
     flex-shrink: 0;
 }
 
 .permission-module-card.has-access .module-icon {
-    background: #d1fae5;
+    background: var(--success-light, #F0FDF4);
 }
 
 .module-title {
     font-size: 0.875rem;
     font-weight: 700;
-    color: #1e293b;
+    color: var(--text-primary, #333333);
     margin: 0;
     white-space: nowrap;
     overflow: hidden;
@@ -98,7 +98,7 @@
 .module-card-toggle-btn {
     font-size: 0.6875rem;
     font-weight: 600;
-    color: #000000;
+    color: var(--text-primary, #333333);
     background: transparent;
     border: none;
     cursor: pointer;
@@ -125,7 +125,7 @@
 }
 
 .permission-checkbox.checked {
-    background-color: rgba(16, 185, 129, 0.08);
+    background-color: color-mix(in srgb, var(--success, #15803D) 8%, transparent);
 }
 
 .permission-checkbox.disabled {
@@ -137,7 +137,7 @@
     width: 16px;
     height: 16px;
     cursor: pointer;
-    accent-color: #10b981;
+    accent-color: var(--success, #15803D);
     border-radius: 4px;
     flex-shrink: 0;
 }
@@ -147,7 +147,7 @@
     align-items: center;
     gap: 0.5rem;
     font-size: 0.8125rem;
-    color: #000000;
+    color: var(--text-primary, #333333);
     user-select: none;
     min-width: 0;
     flex: 1;
@@ -159,8 +159,8 @@
     letter-spacing: 0.025em;
     padding: 0.125rem 0.45rem;
     border-radius: 4px;
-    background: #f1f5f9;
-    color: #000000;
+    background: var(--background, #FAFAF5);
+    color: var(--text-primary, #333333);
     flex-shrink: 0;
 }
 
@@ -169,31 +169,31 @@
 }
 
 .permission-checkbox.checked .permission-action.perm-read {
-    background: #3b82f6;
+    background: var(--primary, #1A2517);
 }
 
 .permission-checkbox.checked .permission-action.perm-write {
-    background: #10b981;
+    background: var(--success, #15803D);
 }
 
 .permission-checkbox.checked .permission-action.perm-update {
-    background: #f59e0b;
+    background: var(--warning, #A16207);
 }
 
 .permission-checkbox.checked .permission-action.perm-delete {
-    background: #ef4444;
+    background: var(--danger, #B91C1C);
 }
 
 .permission-desc-text {
     font-size: 0.75rem;
-    color: #000000;
+    color: var(--text-primary, #333333);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
 .permission-checkbox.checked .permission-desc-text {
-    color: #0f172a;
+    color: var(--text-primary, #333333);
     font-weight: 500;
 }
 

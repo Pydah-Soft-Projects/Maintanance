@@ -4,6 +4,51 @@ const { getModel: getHRMSEmployeeModel } = require('../models/HRMSEmployee');
 const { mergePermissions } = require('../utils/permissions');
 const bcrypt = require('bcryptjs');
 
+const syncWorkerServiceGroups = async (pool, userId, roleName, serviceGroupIds) => {
+    const [users] = await pool.query('SELECT role FROM users WHERE id = ?', [userId]);
+    const currentRole = users[0]?.role;
+    const [currentGroups] = await pool.query(
+        `SELECT gm.group_id
+         FROM approval_service_group_members gm
+         JOIN approval_service_groups g ON g.id = gm.group_id
+         WHERE gm.user_id = ? AND g.member_type = 'worker'`,
+        [userId]
+    );
+    const currentIds = currentGroups.map((group) => Number(group.group_id));
+    const targetIds = roleName === 'worker' ? serviceGroupIds : [];
+    const removedIds = currentIds.filter((id) => !targetIds.includes(id));
+
+    if (removedIds.length || currentRole !== roleName) {
+        const [pendingApprovals] = await pool.query(
+            `SELECT COUNT(*) AS count
+             FROM complaint_approval_step_members sm
+             JOIN complaint_approval_steps s ON s.id = sm.step_id AND s.state = 'pending'
+             JOIN complaint_approval_instances i ON i.id = s.instance_id AND i.state = 'pending'
+             WHERE sm.user_id = ?`,
+            [userId]
+        );
+        if (Number(pendingApprovals[0].count) > 0) {
+            const error = new Error('This Worker has pending approvals and cannot be removed from service types yet');
+            error.statusCode = 409;
+            throw error;
+        }
+    }
+
+    if (removedIds.length) {
+        await pool.query(
+            'DELETE FROM approval_service_group_members WHERE user_id = ? AND group_id IN (?)',
+            [userId, removedIds]
+        );
+    }
+
+    if (targetIds.length) {
+        await pool.query(
+            'INSERT IGNORE INTO approval_service_group_members (group_id, user_id) VALUES ?',
+            [targetIds.map((groupId) => [groupId, userId])]
+        );
+    }
+};
+
 const parseJson = (value, fallback = []) => {
     if (value == null || value === '') return fallback;
     if (typeof value !== 'string') return value;
@@ -38,10 +83,28 @@ exports.getEmployees = async (_req, res) => {
             WHERE u.is_ticket_employee = 1 AND u.is_active = 1
             ORDER BY u.created_at DESC
         `);
+        const [serviceGroups] = await masterPool.query(`
+            SELECT gm.user_id, g.id AS group_id, g.service_type
+            FROM approval_service_group_members gm
+            JOIN approval_service_groups g ON g.id = gm.group_id AND g.is_active = 1
+            JOIN users u ON u.id = gm.user_id AND u.is_active = 1
+              AND u.is_ticket_employee = 1 AND u.role = 'worker'
+            WHERE g.member_type = 'worker'
+            ORDER BY g.service_type
+        `);
+        const serviceGroupsByUser = new Map();
+        serviceGroups.forEach(({ user_id, group_id, service_type }) => {
+            const existing = serviceGroupsByUser.get(Number(user_id)) || { ids: [], names: [] };
+            existing.ids.push(Number(group_id));
+            existing.names.push(service_type);
+            serviceGroupsByUser.set(Number(user_id), existing);
+        });
         res.json({
             success: true,
             data: employees.map((employee) => ({
                 ...employee,
+                service_group_ids: serviceGroupsByUser.get(Number(employee.id))?.ids || [],
+                service_types: serviceGroupsByUser.get(Number(employee.id))?.names || [],
                 assigned_categories: parseJson(employee.assigned_categories),
                 assigned_subcategories: parseJson(employee.assigned_subcategories),
                 user_permissions: parseJson(employee.user_permissions, null),
@@ -151,13 +214,13 @@ exports.createEmployee = async (req, res) => {
             custom_role_id,
             assigned_categories,
             assigned_subcategories,
-            permissions
+            service_group_ids = []
         } = req.body;
 
         const targetHrmsId = hrms_employee_id || hrms_id;
         const targetEmpNo = hrms_employee_no || employee_no;
 
-        let roleName = role || 'staff';
+        let roleName = role || 'worker';
         if (custom_role_id) {
             const [roles] = await masterPool.query(
                 'SELECT role_name FROM roles WHERE id = ? AND is_active = 1',
@@ -166,6 +229,39 @@ exports.createEmployee = async (req, res) => {
             if (!roles.length) return res.status(404).json({ success: false, message: 'Role not found or inactive' });
             roleName = roles[0].role_name;
         }
+        if (typeof roleName !== 'string' || !roleName.trim()) {
+            return res.status(400).json({ success: false, message: 'Select an active maintenance role' });
+        }
+        if (!Array.isArray(service_group_ids) ||
+            service_group_ids.some((id) => !Number.isInteger(Number(id)) || Number(id) <= 0) ||
+            (roleName !== 'worker' && service_group_ids.length > 0)) {
+            return res.status(400).json({ success: false, message: 'Service types can only be assigned to Workers' });
+        }
+        const normalizedServiceGroupIds = [...new Set(service_group_ids.map(Number))];
+        if (roleName === 'worker') {
+            const [serviceGroups] = await masterPool.query(
+                `SELECT id FROM approval_service_groups
+                 WHERE id IN (?) AND member_type = 'worker' AND is_active = 1`,
+                [normalizedServiceGroupIds.length ? normalizedServiceGroupIds : [0]]
+            );
+            if (serviceGroups.length !== normalizedServiceGroupIds.length) {
+                return res.status(400).json({ success: false, message: 'Select valid Worker service types' });
+            }
+            if (!normalizedServiceGroupIds.length) {
+                return res.status(400).json({ success: false, message: 'Assign at least one service type to a Worker' });
+            }
+        }
+        if (['sub_admin', 'super_admin'].includes(roleName) && req.user?.role !== 'super_admin') {
+            return res.status(403).json({ success: false, message: 'Only a Superadmin can assign administrative roles' });
+        }
+        const [canonicalRoles] = await masterPool.query(
+            'SELECT id FROM roles WHERE role_name = ? AND is_active = 1',
+            [roleName]
+        );
+        if (!canonicalRoles.length) {
+            return res.status(409).json({ success: false, message: `The ${roleName} role is not configured` });
+        }
+        const roleId = canonicalRoles[0].id;
 
         // Branch 1: User provisioned from HRMS connection
         if (targetHrmsId || targetEmpNo) {
@@ -186,7 +282,7 @@ exports.createEmployee = async (req, res) => {
 
             const hrmsIdStr = hrmsEmp._id.toString();
             const empNoStr = String(hrmsEmp.emp_no || targetEmpNo).trim();
-            const userType = ['super_admin', 'admin'].includes(roleName) ? 'admin' : 'staff';
+            const userType = roleName === 'super_admin' ? 'admin' : 'staff';
             const displayName = (name && name.trim()) || hrmsEmp.employee_name || empNoStr;
             const empEmail = (email && email.trim()) || hrmsEmp.email || null;
             const empPhone = (phone && phone.trim()) || hrmsEmp.phone_number || null;
@@ -202,21 +298,22 @@ exports.createEmployee = async (req, res) => {
                 if (user.is_active) {
                     return res.status(409).json({ success: false, message: 'This employee is already registered in the ticket system' });
                 }
+                await syncWorkerServiceGroups(masterPool, user.id, roleName, normalizedServiceGroupIds);
                 // Reactivate and update
                 await masterPool.query(`
                     UPDATE users
-                    SET is_active = 1, is_ticket_employee = 1, name = ?, role = ?, role_id = ?,
-                        hrms_id = ?, email = COALESCE(?, email), phone = COALESCE(?, phone), permissions = ?,
+                    SET is_active = 1, is_ticket_employee = 1, user_type = ?, name = ?, role = ?, role_id = ?,
+                        hrms_id = ?, email = COALESCE(?, email), phone = COALESCE(?, phone), permissions = NULL,
                         assigned_categories = ?, assigned_subcategories = ?, updated_at = NOW()
                     WHERE id = ?
                 `, [
+                    userType,
                     displayName,
                     roleName,
-                    custom_role_id || null,
+                    roleId,
                     hrmsIdStr,
                     empEmail,
                     empPhone,
-                    permissions ? JSON.stringify(permissions) : null,
                     JSON.stringify(assigned_categories || []),
                     JSON.stringify(assigned_subcategories || []),
                     user.id
@@ -234,7 +331,7 @@ exports.createEmployee = async (req, res) => {
                     user_type, name, username, email, phone, password_hash,
                     role, role_id, hrms_id, permissions, assigned_categories,
                     assigned_subcategories, is_ticket_employee, is_active, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 1, 1, NOW(), NOW())
+                ) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, NULL, ?, ?, 1, 1, NOW(), NOW())
             `, [
                 userType,
                 displayName,
@@ -242,12 +339,12 @@ exports.createEmployee = async (req, res) => {
                 empEmail,
                 empPhone,
                 roleName,
-                custom_role_id || null,
+                roleId,
                 hrmsIdStr,
-                permissions ? JSON.stringify(permissions) : null,
                 JSON.stringify(assigned_categories || []),
                 JSON.stringify(assigned_subcategories || [])
             ]);
+            await syncWorkerServiceGroups(masterPool, insertResult.insertId, roleName, normalizedServiceGroupIds);
 
             return res.status(201).json({
                 success: true,
@@ -272,14 +369,14 @@ exports.createEmployee = async (req, res) => {
         }
 
         const passwordHash = password ? await bcrypt.hash(password, 10) : null;
-        const userType = ['super_admin', 'admin'].includes(roleName) ? 'admin' : 'staff';
+        const userType = roleName === 'super_admin' ? 'admin' : 'staff';
 
         const [insertResult] = await masterPool.query(`
             INSERT INTO users (
                 user_type, name, username, email, phone, password_hash,
                 role, role_id, permissions, assigned_categories, assigned_subcategories,
                 is_ticket_employee, is_active, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, NOW(), NOW())
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, 1, 1, NOW(), NOW())
         `, [
             userType,
             name.trim(),
@@ -288,11 +385,11 @@ exports.createEmployee = async (req, res) => {
             phone?.trim() || null,
             passwordHash,
             roleName,
-            custom_role_id || null,
-            permissions ? JSON.stringify(permissions) : null,
+            roleId,
             JSON.stringify(assigned_categories || []),
             JSON.stringify(assigned_subcategories || [])
         ]);
+        await syncWorkerServiceGroups(masterPool, insertResult.insertId, roleName, normalizedServiceGroupIds);
 
         return res.status(201).json({
             success: true,
@@ -301,7 +398,7 @@ exports.createEmployee = async (req, res) => {
         });
     } catch (error) {
         console.error('Create User Error:', error);
-        res.status(500).json({ success: false, message: error.message || 'Server error creating user' });
+        res.status(error.statusCode || 500).json({ success: false, message: error.message || 'Server error creating user' });
     }
 };
 
@@ -316,16 +413,20 @@ exports.updateEmployee = async (req, res) => {
             custom_role_id,
             assigned_categories,
             assigned_subcategories,
-            permissions
+            service_group_ids = []
         } = req.body;
         const employeeId = Number(req.params.id);
         if (!Number.isInteger(employeeId)) return res.status(400).json({ success: false, message: 'Invalid user ID' });
 
         const [currentUsers] = await masterPool.query(
-            'SELECT role_id FROM users WHERE id = ? AND is_ticket_employee = 1',
+            'SELECT role_id, role FROM users WHERE id = ? AND is_ticket_employee = 1',
             [employeeId]
         );
         if (!currentUsers.length) return res.status(404).json({ success: false, message: 'Ticket user not found' });
+        if (['sub_admin', 'super_admin'].includes(currentUsers[0].role) &&
+            req.user?.role !== 'super_admin') {
+            return res.status(403).json({ success: false, message: 'Only a Superadmin can manage administrative accounts' });
+        }
 
         let roleName = role;
         if (custom_role_id) {
@@ -335,6 +436,42 @@ exports.updateEmployee = async (req, res) => {
             );
             if (!roles.length) return res.status(404).json({ success: false, message: 'Role not found or inactive' });
             roleName = roles[0].role_name;
+        }
+        if (!Array.isArray(service_group_ids) ||
+            service_group_ids.some((id) => !Number.isInteger(Number(id)) || Number(id) <= 0)) {
+            return res.status(400).json({ success: false, message: 'Select valid Worker service types' });
+        }
+        const normalizedServiceGroupIds = [...new Set(service_group_ids.map(Number))];
+        if (['sub_admin', 'super_admin'].includes(roleName) && req.user?.role !== 'super_admin') {
+            return res.status(403).json({ success: false, message: 'Only a Superadmin can assign administrative roles' });
+        }
+        let roleId = currentUsers[0].role_id;
+        if (roleName !== undefined) {
+            const [canonicalRoles] = await masterPool.query(
+                'SELECT id FROM roles WHERE role_name = ? AND is_active = 1',
+                [roleName]
+            );
+            if (!canonicalRoles.length) {
+                return res.status(409).json({ success: false, message: `The ${roleName} role is not configured` });
+            }
+            roleId = canonicalRoles[0].id;
+        }
+        const targetRole = roleName || currentUsers[0].role;
+        if (targetRole !== 'worker' && normalizedServiceGroupIds.length) {
+            return res.status(400).json({ success: false, message: 'Service types can only be assigned to Workers' });
+        }
+        if (targetRole === 'worker') {
+            if (!normalizedServiceGroupIds.length) {
+                return res.status(400).json({ success: false, message: 'Assign at least one service type to a Worker' });
+            }
+            const [serviceGroups] = await masterPool.query(
+                `SELECT id FROM approval_service_groups
+                 WHERE id IN (?) AND member_type = 'worker' AND is_active = 1`,
+                [normalizedServiceGroupIds]
+            );
+            if (serviceGroups.length !== normalizedServiceGroupIds.length) {
+                return res.status(400).json({ success: false, message: 'Select valid Worker service types' });
+            }
         }
 
         const updates = ['name = COALESCE(NULLIF(?, ""), name)'];
@@ -356,10 +493,12 @@ exports.updateEmployee = async (req, res) => {
         if (roleName) {
             updates.push('role = ?');
             params.push(roleName);
+            updates.push('user_type = ?');
+            params.push(roleName === 'super_admin' ? 'admin' : 'staff');
         }
-        if (custom_role_id !== undefined) {
+        if (custom_role_id !== undefined || role !== undefined) {
             updates.push('role_id = ?');
-            params.push(custom_role_id || null);
+            params.push(roleId);
         }
         if (assigned_categories !== undefined) {
             updates.push('assigned_categories = ?');
@@ -369,19 +508,12 @@ exports.updateEmployee = async (req, res) => {
             updates.push('assigned_subcategories = ?');
             params.push(JSON.stringify(assigned_subcategories || []));
         }
-        if (permissions !== undefined) {
-            updates.push('permissions = ?');
-            params.push(permissions ? JSON.stringify(permissions) : null);
-        } else if (
-            custom_role_id !== undefined &&
-            String(custom_role_id || '') !== String(currentUsers[0].role_id || '')
-        ) {
-            updates.push('permissions = NULL');
-        }
+        updates.push('permissions = NULL');
 
         updates.push('updated_at = NOW()');
         params.push(employeeId);
 
+        await syncWorkerServiceGroups(masterPool, employeeId, targetRole, normalizedServiceGroupIds);
         const [result] = await masterPool.query(
             `UPDATE users SET ${updates.join(', ')} WHERE id = ? AND is_ticket_employee = 1`,
             params
@@ -390,12 +522,37 @@ exports.updateEmployee = async (req, res) => {
         res.json({ success: true, message: 'Ticket user updated' });
     } catch (error) {
         console.error('Update Employee Error:', error);
-        res.status(500).json({ success: false, message: 'Server error updating ticket user' });
+        res.status(error.statusCode || 500).json({ success: false, message: error.message || 'Server error updating ticket user' });
     }
 };
 
 exports.deleteEmployee = async (req, res) => {
     try {
+        const [employee] = await masterPool.query(
+            'SELECT id, role FROM users WHERE id = ? AND is_ticket_employee = 1',
+            [req.params.id]
+        );
+        if (!employee.length) return res.status(404).json({ success: false, message: 'Ticket user not found' });
+        if (employee[0].role === 'super_admin') {
+            return res.status(403).json({ success: false, message: 'Superadmin accounts cannot be removed' });
+        }
+        if (employee[0].role === 'sub_admin' && req.user?.role !== 'super_admin') {
+            return res.status(403).json({ success: false, message: 'Only a Superadmin can remove Sub-admin accounts' });
+        }
+        const [pendingApprovals] = await masterPool.query(
+            `SELECT COUNT(*) AS count
+             FROM complaint_approval_step_members sm
+             JOIN complaint_approval_steps s ON s.id = sm.step_id AND s.state = 'pending'
+             JOIN complaint_approval_instances i ON i.id = s.instance_id AND i.state = 'pending'
+             WHERE sm.user_id = ?`,
+            [employee[0].id]
+        );
+        if (Number(pendingApprovals[0].count) > 0) {
+            return res.status(409).json({ success: false, message: 'Users assigned to pending approvals cannot be removed' });
+        }
+        if (employee[0].role === 'worker') {
+            await syncWorkerServiceGroups(masterPool, employee[0].id, null, []);
+        }
         const [result] = await masterPool.query(
             `UPDATE users SET is_active = 0, is_ticket_employee = 0, role_id = NULL,
              assigned_categories = NULL, assigned_subcategories = NULL,

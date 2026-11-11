@@ -11,9 +11,11 @@ import api from '../../config/api';
 import toast from 'react-hot-toast';
 import EmployeeModal from '../../components/admin/EmployeeModal';
 import EmployeeHistoryModal from '../../components/admin/EmployeeHistoryModal';
+import useAuthStore from '../../store/authStore';
 import '../../styles/admin-pages.css';
 
 const EmployeeManagement = () => {
+    const currentUser = useAuthStore((state) => state.user);
     const [searchTerm, setSearchTerm] = useState('');
     const [showModal, setShowModal] = useState(false);
     const [editingUser, setEditingUser] = useState(null);
@@ -44,8 +46,9 @@ const EmployeeManagement = () => {
         onSuccess: () => {
             toast.success(editingUser ? 'User updated successfully' : 'User registered from HRMS successfully');
             closeModal();
-            queryClient.invalidateQueries(['ticket-employees']);
-            queryClient.invalidateQueries(['rbac-users']);
+            queryClient.invalidateQueries({ queryKey: ['ticket-employees'] });
+            queryClient.invalidateQueries({ queryKey: ['rbac-users'] });
+            queryClient.invalidateQueries({ queryKey: ['approval-workflow-config'] });
         },
         onError: (err) => toast.error(err.response?.data?.message || 'Operation failed')
     };
@@ -64,9 +67,10 @@ const EmployeeManagement = () => {
         mutationFn: (id) => api.delete(`/employees/${id}`),
         onSuccess: () => {
             toast.success('User removed from ticket system');
-            queryClient.invalidateQueries(['ticket-employees']);
+            queryClient.invalidateQueries({ queryKey: ['ticket-employees'] });
+            queryClient.invalidateQueries({ queryKey: ['approval-workflow-config'] });
         },
-        onError: (err) => toast.error('Failed to remove user')
+        onError: () => toast.error('Failed to remove user')
     });
 
     // Filtering across all users
@@ -90,7 +94,8 @@ const EmployeeManagement = () => {
                 role: payload.role,
                 custom_role_id: payload.custom_role_id,
                 assigned_categories: payload.assigned_categories,
-                assigned_subcategories: payload.assigned_subcategories
+                assigned_subcategories: payload.assigned_subcategories,
+                service_group_ids: payload.service_group_ids
             });
         } else if (type === 'update') {
             updateMutation.mutate({
@@ -100,7 +105,8 @@ const EmployeeManagement = () => {
                     role: payload.role,
                     custom_role_id: payload.custom_role_id,
                     assigned_categories: payload.assigned_categories,
-                    assigned_subcategories: payload.assigned_subcategories
+                    assigned_subcategories: payload.assigned_subcategories,
+                    service_group_ids: payload.service_group_ids
                 }
             });
         }
@@ -198,7 +204,14 @@ const EmployeeManagement = () => {
                                     <td>{employee.username || '—'}</td>
                                     <td className="user-table-email">{employee.email || '—'}</td>
                                     <td>{employee.phone || '—'}</td>
-                                    <td>{employee.role_display_name || employee.role || '—'}</td>
+                                    <td>
+                                        <span>{employee.role_display_name || employee.role || '—'}</span>
+                                        {employee.role === 'worker' && employee.service_types?.length > 0 && (
+                                            <span className="mt-1 block text-xs text-slate-500">
+                                                {employee.service_types.join(', ')}
+                                            </span>
+                                        )}
+                                    </td>
                                     <td>
                                         <div className="user-table-actions">
                                             <button
@@ -258,6 +271,7 @@ const EmployeeManagement = () => {
                 onClose={closeModal}
                 user={editingUser}
                 availableRoles={rolesData || []}
+                canAssignAdminRoles={currentUser?.role === 'super_admin'}
                 onSubmit={handleModalSubmit}
                 isSubmitting={createMutation.isPending || updateMutation.isPending}
             />

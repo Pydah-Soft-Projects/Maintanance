@@ -26,7 +26,7 @@ const AdminLayout = () => {
         navigate('/login');
     };
 
-    const isSuperAdminOrAdmin = user?.role === 'super_admin' || user?.role === 'admin';
+    const isSuperAdminOrAdmin = user?.role === 'super_admin';
     // --- Navigation Configuration ---
     const allNavItems = [
         {
@@ -77,13 +77,14 @@ const AdminLayout = () => {
         container: {
             display: 'flex',
             height: '100vh',
-            backgroundColor: '#F8FAFC',
+            backgroundColor: 'var(--background, #FAFAF5)',
             overflow: 'hidden',
         },
         sidebar: {
             width: '270px',
-            backgroundColor: '#FFFFFF',
-            borderRight: '1px solid #e2e8f0',
+            backgroundColor: 'var(--sidebar, #F3F1EB)',
+            color: 'var(--sidebar-text, #333333)',
+            borderRight: '1px solid var(--border, #E5E7EB)',
             height: '100%',
             position: 'fixed',
             left: 0,
@@ -100,24 +101,24 @@ const AdminLayout = () => {
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: '0 20px',
-            borderBottom: '1px solid #f1f5f9',
+            borderBottom: '1px solid var(--border, #E5E7EB)',
         },
         logoBox: {
             width: '36px',
             height: '36px',
             borderRadius: '11px',
-            background: '#eff6ff',
+            background: 'var(--primary-light, #E8EEE4)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: '#2563eb',
+            color: 'var(--primary, #1A2517)',
             fontWeight: 'bold',
             fontSize: '16px',
         },
         logoText: {
             fontSize: '14px',
             fontWeight: '700',
-            color: '#0f172a',
+            color: 'var(--sidebar-text, #F5F8FC)',
             marginLeft: '12px',
             fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
             letterSpacing: '-0.02em',
@@ -136,8 +137,8 @@ const AdminLayout = () => {
             borderRadius: '10px',
             fontSize: '13px',
             fontWeight: isActive ? '600' : '500',
-            color: isActive ? '#1d4ed8' : '#1f2937',
-            backgroundColor: isActive ? '#eff6ff' : 'transparent',
+            color: isActive ? 'var(--primary, #1A2517)' : 'var(--sidebar-text, #333333)',
+            backgroundColor: isActive ? 'var(--primary-light, #E8EEE4)' : 'transparent',
             textDecoration: 'none',
             transition: 'all 0.15s ease',
             position: 'relative',
@@ -158,24 +159,24 @@ const AdminLayout = () => {
         },
         toggleButton: {
             position: 'fixed', top: '16px', left: '16px', zIndex: 50,
-            padding: '9px', borderRadius: '10px', backgroundColor: '#ffffff',
-            border: '1px solid #e2e8f0', cursor: 'pointer', color: '#000000',
+            padding: '9px', borderRadius: '10px', backgroundColor: 'var(--surface, #FFFFFF)',
+            border: '1px solid var(--border, #E5E7EB)', cursor: 'pointer', color: 'var(--text-primary, #333333)',
             boxShadow: '0 2px 6px rgba(15, 23, 42, 0.06)'
         },
         profileCard: {
             margin: '0 14px 10px 14px',
             padding: '11px 12px',
             borderRadius: '12px',
-            background: '#f8fafc',
-            border: '1px solid #e2e8f0',
+            background: 'var(--background, #FAFAF5)',
+            border: '1px solid var(--border, #E5E7EB)',
             display: 'flex',
             alignItems: 'center',
             gap: '10px',
         },
         logoutButton: {
             width: '100%', padding: '9px 12px', borderRadius: '10px',
-            backgroundColor: '#ffffff', color: '#1f2937',
-            border: '1px solid #e2e8f0', cursor: 'pointer',
+            backgroundColor: 'var(--surface, #FFFFFF)', color: 'var(--text-primary, #333333)',
+            border: '1px solid var(--border, #E5E7EB)', cursor: 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
             fontSize: '12px', fontWeight: '600',
             transition: 'all 0.15s ease'
@@ -183,15 +184,15 @@ const AdminLayout = () => {
         mobileHeader: {
             display: 'none',
             height: '64px',
-            background: '#ffffff',
+            background: 'var(--navbar, #FFFFFF)',
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: '0 16px',
             position: 'fixed',
             top: 0, left: 0, right: 0,
             zIndex: 45,
-            color: '#0f172a',
-            borderBottom: '1px solid #e2e8f0',
+            color: 'var(--text-primary, #333333)',
+            borderBottom: '1px solid var(--border, #E5E7EB)',
             boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)'
         },
         mobileBottomBar: {
@@ -199,8 +200,8 @@ const AdminLayout = () => {
             bottom: 0,
             left: 0,
             right: 0,
-            backgroundColor: 'rgba(255, 255, 255, 0.98)',
-            borderTop: '1px solid rgba(226, 232, 240, 0.8)',
+            backgroundColor: 'color-mix(in srgb, var(--surface, #FFFFFF) 98%, transparent)',
+            borderTop: '1px solid var(--border, #E5E7EB)',
             backdropFilter: 'blur(12px)',
             zIndex: 50,
             paddingBottom: 'env(safe-area-inset-bottom, 20px)',
@@ -218,7 +219,7 @@ const AdminLayout = () => {
             gap: '4px',
             padding: '8px',
             textDecoration: 'none',
-            color: isActive ? '#2563EB' : '#9CA3AF',
+            color: isActive ? 'var(--primary, #1A2517)' : 'var(--text-muted, #777777)',
             fontSize: '10px',
             fontWeight: '600',
         }),
@@ -311,7 +312,8 @@ const AdminLayout = () => {
                         type="button"
                         onClick={() => setDesktopSidebarOpen(false)}
                         aria-label="Close admin navigation"
-                        className="rounded-lg p-2 text-slate-400 transition-colors  "
+                        className="rounded-lg p-2 transition-colors"
+                        style={{ color: 'var(--sidebar-muted, #AABBD4)' }}
                     >
                         <PanelLeftClose size={20} />
                     </button>
@@ -330,7 +332,7 @@ const AdminLayout = () => {
                                     <>
                                         <Icon size={20} />
                                         <span>{item.label}</span>
-                                        {isActive && <div style={{ marginLeft: 'auto', width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#2563EB' }} />}
+                                        {isActive && <div style={{ marginLeft: 'auto', width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'var(--primary, #1A2517)' }} />}
                                     </>
                                 )}
                             </NavLink>
@@ -340,20 +342,20 @@ const AdminLayout = () => {
 
                 {/* User Info */}
                 <div style={styles.profileCard}>
-                    <div style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: '#E0E7FF', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#4F46E5', fontSize: '14px', fontWeight: 'bold' }}>
+                    <div style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: 'var(--primary-light, #E8EEE4)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary, #1A2517)', fontSize: '14px', fontWeight: 'bold' }}>
                         {user?.username?.charAt(0).toUpperCase()}
                     </div>
                     <div style={{ flex: 1, overflow: 'hidden' }}>
-                        <p style={{ fontSize: '13px', fontWeight: '600', color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', margin: 0 }}>
+                        <p style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary, #333333)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', margin: 0 }}>
                             {user?.name || user?.username || 'Admin'}
                         </p>
-                        <p style={{ fontSize: '11px', color: '#000000', margin: 0 }}>
+                        <p style={{ fontSize: '11px', color: 'var(--text-secondary, #555555)', margin: 0 }}>
                             {user?.role}
                         </p>
                     </div>
                 </div>
 
-                <div style={{ padding: '16px', borderTop: '1px solid #f1f5f9', backgroundColor: 'rgba(248, 250, 252, 0.5)' }}>
+                <div style={{ padding: '16px', borderTop: '1px solid var(--border, #E5E7EB)', backgroundColor: 'color-mix(in srgb, var(--background, #FAFAF5) 50%, transparent)' }}>
                     <button onClick={handleLogout} style={styles.logoutButton}>
                         <LogOut size={16} /> Sign Out
                     </button>

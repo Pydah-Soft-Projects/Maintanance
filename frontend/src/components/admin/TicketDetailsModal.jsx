@@ -1,10 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
+import toast from 'react-hot-toast';
 import {
     X,
     UserPlus,
     MessageSquare,
-    Star,
+    CheckCircle,
+    XCircle,
     Clock,
     User,
     MapPin,
@@ -12,6 +14,7 @@ import {
 } from 'lucide-react';
 import TicketStepper from './TicketStepper';
 import { resolveTicketPhotoUrl } from '../../utils/ticketPhoto';
+import { getFeedbackSatisfaction } from '../../utils/ticketFeedback';
 import './TicketDetailsModal.css';
 
 const STATUS_COLORS = {
@@ -19,7 +22,8 @@ const STATUS_COLORS = {
     approaching: 'bg-blue-100 text-blue-800 border-blue-200',
     resolving: 'bg-purple-100 text-purple-800 border-purple-200',
     completed: 'bg-green-100 text-green-800 border-green-200',
-    closed: 'bg-gray-100 text-gray-800 border-gray-200'
+    closed: 'bg-gray-100 text-gray-800 border-gray-200',
+    rejected: 'bg-red-100 text-red-800 border-red-200'
 };
 
 const STATUS_LABELS = {
@@ -27,7 +31,15 @@ const STATUS_LABELS = {
     approaching: 'Approaching',
     resolving: 'Resolving',
     completed: 'Completed',
-    closed: 'Closed'
+    closed: 'Closed',
+    rejected: 'Rejected'
+};
+
+const APPROVAL_ROLE_LABELS = {
+    manager: 'Manager',
+    worker: 'Worker',
+    sub_admin: 'Sub-admin',
+    super_admin: 'Superadmin'
 };
 
 const TicketDetailsModal = ({
@@ -37,13 +49,19 @@ const TicketDetailsModal = ({
     initialAction = null,
     onAssign,
     onRemoveAssignment,
+    canManageAssignments = true,
     statusForm,
     onStatusChange,
     onStatusSubmit,
     statusUpdating = false,
     assignForm,
+    setAssignForm,
     managersList = [],
     workersList = [],
+    hrmsEmployees = [],
+    hrmsEmployeesLoading = false,
+    hrmsEmployeesError = false,
+    onHrmsSearchChange,
     assignTab,
     onAssignTabChange,
     onAssignToggle,
@@ -52,22 +70,26 @@ const TicketDetailsModal = ({
     commentForm,
     onCommentChange,
     onCommentSubmit,
-    commentSaving = false
+    commentSaving = false,
+    approvalData = null,
+    approvalLoading = false,
+    onApprovalDecision,
+    approvalSaving = false
 }) => {
-    const [showAssignmentEditor, setShowAssignmentEditor] = useState(false);
-    const [showResponseEditor, setShowResponseEditor] = useState(false);
+    const [showAssignmentEditor, setShowAssignmentEditor] = useState(initialAction === 'assign');
+    const [showResponseEditor, setShowResponseEditor] = useState(initialAction === 'response');
     const [assigneeSearch, setAssigneeSearch] = useState('');
-
-    useEffect(() => {
-        setShowAssignmentEditor(initialAction === 'assign');
-        setShowResponseEditor(initialAction === 'response');
-    }, [initialAction, ticket?.id]);
-
-    useEffect(() => {
-        setAssigneeSearch('');
-    }, [ticket?.id, assignTab]);
+    const [rejectionReason, setRejectionReason] = useState('');
+    const feedbackSatisfaction = getFeedbackSatisfaction(ticket.feedback);
+    const [externalName, setExternalName] = useState('');
+    const [externalPhone, setExternalPhone] = useState('');
 
     if (!ticket) return null;
+
+    const isApprovalPending = approvalData?.state === 'pending';
+    const isRejected = ticket.status === 'rejected';
+    const isStatusLocked = isApprovalPending || isRejected;
+    const isAssignmentLocked = isApprovalPending || isRejected || !canManageAssignments;
 
     const visibleAssignees = (assignTab === 'managers' ? managersList : workersList).filter((person) => {
         const query = assigneeSearch.trim().toLowerCase();
@@ -81,6 +103,10 @@ const TicketDetailsModal = ({
             person.role_display_name
         ].some((value) => String(value || '').toLowerCase().includes(query));
     });
+    const changeAssignTab = (tab) => {
+        setAssigneeSearch('');
+        onAssignTabChange(tab);
+    };
 
     const handleRemoveAssignment = (assignment) => {
         if (!onRemoveAssignment) return;
@@ -113,29 +139,29 @@ const TicketDetailsModal = ({
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="ticket-details-title"
-                style={{ position: 'relative', zIndex: 10000, maxHeight: '85vh', width: '100%', maxWidth: '1000px', margin: '2rem', backgroundColor: 'white', borderRadius: '1.5rem', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', display: 'flex', flexDirection: 'column' }}
+                style={{ position: 'relative', zIndex: 10000, maxHeight: '85vh', width: '100%', maxWidth: '1000px', margin: '2rem', backgroundColor: 'var(--surface, #FFFFFF)', borderRadius: '1.5rem', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', display: 'flex', flexDirection: 'column' }}
             >
                 {/* Header Container */}
-                <div className="ticket-details-header modal-header" style={{ padding: '1.5rem 2.5rem', borderBottom: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div className="ticket-details-header modal-header" style={{ padding: '1.5rem 2.5rem', borderBottom: '1px solid var(--border, #E5E7EB)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <div>
-                        <h2 id="ticket-details-title" className="heading-font" style={{ fontSize: '1.5rem', fontWeight: 900, color: '#111827' }}>Complaint details</h2>
+                        <h2 id="ticket-details-title" className="heading-font" style={{ fontSize: '1.5rem', fontWeight: 900, color: 'var(--text-primary, #333333)' }}>Complaint details</h2>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.25rem' }}>
-                            <p style={{ fontSize: '0.75rem', color: '#2563eb', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>REF: {ticket.ticket_number}</p>
-                            <span style={{ width: '4px', height: '4px', borderRadius: '50%', backgroundColor: '#d1d5db' }}></span>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', color: '#000000' }}>
+                            <p style={{ fontSize: '0.75rem', color: 'var(--primary, #1A2517)', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>REF: {ticket.ticket_number}</p>
+                            <span style={{ width: '4px', height: '4px', borderRadius: '50%', backgroundColor: 'var(--border-strong, #CBD5E1)' }}></span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', color: 'var(--text-primary, #333333)' }}>
                                 <Clock size={12} />
                                 <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>{new Date(ticket.created_at).toLocaleString()}</span>
                             </div>
                         </div>
                     </div>
-                    <button onClick={onClose} aria-label="Close complaint details" style={{ padding: '0.75rem', backgroundColor: '#f3f4f6', color: '#000000', borderRadius: '1rem', border: 'none', cursor: 'pointer', transition: 'background-color 0.2s' }}>
+                    <button onClick={onClose} aria-label="Close complaint details" style={{ padding: '0.75rem', backgroundColor: 'var(--background, #FAFAF5)', color: 'var(--text-primary, #333333)', borderRadius: '1rem', border: 'none', cursor: 'pointer', transition: 'background-color 0.2s' }}>
                         <X size={24} />
                     </button>
                 </div>
 
                 <div className="ticket-details-body" style={{ padding: '2rem 2.5rem', display: 'flex', flexDirection: 'column', gap: '2rem', overflowY: 'auto', flex: 1 }}>
                     {isLoading ? (
-                        <div style={{ padding: '3rem 0', textAlign: 'center', color: '#000000', fontWeight: 600 }}>
+                        <div style={{ padding: '3rem 0', textAlign: 'center', color: 'var(--text-primary, #333333)', fontWeight: 600 }}>
                             Loading ticket details...
                         </div>
                     ) : (
@@ -150,31 +176,31 @@ const TicketDetailsModal = ({
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
 
                             {/* Title & Type */}
-                            <div className="ticket-summary-card" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', padding: '1.5rem', backgroundColor: '#f9fafb', borderRadius: '1.5rem', border: '1px solid #f3f4f6' }}>
+                            <div className="ticket-summary-card" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', padding: '1.5rem', backgroundColor: 'var(--background, #FAFAF5)', borderRadius: '1.5rem', border: '1px solid #f3f4f6' }}>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                    <label style={{ fontSize: '0.625rem', textTransform: 'uppercase', fontWeight: 900, color: '#000000', letterSpacing: '0.05em' }}>Subject</label>
-                                    <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#111827', lineHeight: 1.3 }}>{ticket.title}</h3>
+                                    <label style={{ fontSize: '0.625rem', textTransform: 'uppercase', fontWeight: 900, color: 'var(--text-primary, #333333)', letterSpacing: '0.05em' }}>Subject</label>
+                                    <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary, #333333)', lineHeight: 1.3 }}>{ticket.title}</h3>
                                 </div>
-                                <div className="ticket-summary-meta" style={{ display: 'flex', gap: '2rem', borderTop: '1px solid #e5e7eb', paddingTop: '1.5rem' }}>
+                                <div className="ticket-summary-meta" style={{ display: 'flex', gap: '2rem', borderTop: '1px solid var(--border, #E5E7EB)', paddingTop: '1.5rem' }}>
                                     <div className="ticket-summary-field" style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
-                                        <label style={{ fontSize: '0.625rem', textTransform: 'uppercase', fontWeight: 900, color: '#000000', letterSpacing: '0.05em' }}>Category</label>
-                                        <p style={{ fontSize: '1rem', fontWeight: 700, color: '#111827' }}>
+                                        <label style={{ fontSize: '0.625rem', textTransform: 'uppercase', fontWeight: 900, color: 'var(--text-primary, #333333)', letterSpacing: '0.05em' }}>Category</label>
+                                        <p style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary, #333333)' }}>
                                             {ticket.category_name}
-                                            {ticket.sub_category_name && <span style={{ color: '#000000', fontWeight: 500, fontSize: '0.875rem' }}> › {ticket.sub_category_name}</span>}
+                                            {ticket.sub_category_name && <span style={{ color: 'var(--text-primary, #333333)', fontWeight: 500, fontSize: '0.875rem' }}> › {ticket.sub_category_name}</span>}
                                         </p>
                                     </div>
                                     <div className="ticket-summary-field" style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
-                                        <label style={{ fontSize: '0.625rem', textTransform: 'uppercase', fontWeight: 900, color: '#000000', letterSpacing: '0.05em' }}>
+                                        <label style={{ fontSize: '0.625rem', textTransform: 'uppercase', fontWeight: 900, color: 'var(--text-primary, #333333)', letterSpacing: '0.05em' }}>
                                             {ticket.requester_type === 'staff' ? 'Faculty / Staff' : 'Student'}
                                         </label>
-                                        <p style={{ fontSize: '1rem', fontWeight: 700, color: '#111827' }}>
+                                        <p style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary, #333333)' }}>
                                             {requesterName !== 'Unknown' ? requesterName : (ticket.admission_number ? `Staff #${ticket.admission_number}` : 'Unknown')}
                                         </p>
                                         {showAdmissionNumber && (
-                                            <p style={{ fontSize: '0.75rem', fontWeight: 600, color: '#000000', fontFamily: 'monospace' }}>{ticket.admission_number}</p>
+                                            <p style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-primary, #333333)', fontFamily: 'monospace' }}>{ticket.admission_number}</p>
                                         )}
                                         {showStaffId && (
-                                            <p style={{ fontSize: '0.75rem', fontWeight: 600, color: '#000000', fontFamily: 'monospace' }}>ID: {ticket.admission_number}</p>
+                                            <p style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-primary, #333333)', fontFamily: 'monospace' }}>ID: {ticket.admission_number}</p>
                                         )}
                                     </div>
                                 </div>
@@ -182,32 +208,32 @@ const TicketDetailsModal = ({
 
                             {/* Physical Location Details */}
                             {(ticket.college_name || ticket.block_no || ticket.floor_no || ticket.room_no) && (
-                                <div className="ticket-location-card" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', padding: '1.25rem', backgroundColor: '#eff6ff', borderRadius: '1.25rem', border: '1px solid #dbeafe' }}>
-                                    <label style={{ fontSize: '0.6875rem', textTransform: 'uppercase', fontWeight: 900, color: '#1d4ed8', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
-                                        <MapPin size={14} color="#1d4ed8" /> Physical Location
+                                <div className="ticket-location-card" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', padding: '1.25rem', backgroundColor: 'var(--primary-light, #E8EEE4)', borderRadius: '1.25rem', border: '1px solid var(--primary-light, #E8EEE4)' }}>
+                                    <label style={{ fontSize: '0.6875rem', textTransform: 'uppercase', fontWeight: 900, color: 'var(--primary, #1A2517)', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+                                        <MapPin size={14} color="var(--primary, #1A2517)" /> Physical Location
                                     </label>
-                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.5rem', fontSize: '0.875rem', color: '#1e3a8a', fontWeight: 700 }}>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.5rem', fontSize: '0.875rem', color: 'var(--primary-hover, #11180F)', fontWeight: 700 }}>
                                         {ticket.college_name && (
                                             <div>
-                                                <span style={{ fontSize: '0.6875rem', color: '#3b82f6', textTransform: 'uppercase', fontWeight: 800, display: 'block' }}>College</span>
+                                                <span style={{ fontSize: '0.6875rem', color: 'var(--primary, #1A2517)', textTransform: 'uppercase', fontWeight: 800, display: 'block' }}>College</span>
                                                 <span>{ticket.college_name}</span>
                                             </div>
                                         )}
                                         {ticket.block_no && (
                                             <div>
-                                                <span style={{ fontSize: '0.6875rem', color: '#3b82f6', textTransform: 'uppercase', fontWeight: 800, display: 'block' }}>Block</span>
+                                                <span style={{ fontSize: '0.6875rem', color: 'var(--primary, #1A2517)', textTransform: 'uppercase', fontWeight: 800, display: 'block' }}>Block</span>
                                                 <span>{ticket.block_no}</span>
                                             </div>
                                         )}
                                         {ticket.floor_no && (
                                             <div>
-                                                <span style={{ fontSize: '0.6875rem', color: '#3b82f6', textTransform: 'uppercase', fontWeight: 800, display: 'block' }}>Floor</span>
+                                                <span style={{ fontSize: '0.6875rem', color: 'var(--primary, #1A2517)', textTransform: 'uppercase', fontWeight: 800, display: 'block' }}>Floor</span>
                                                 <span>{ticket.floor_no}</span>
                                             </div>
                                         )}
                                         {ticket.room_no && (
                                             <div>
-                                                <span style={{ fontSize: '0.6875rem', color: '#3b82f6', textTransform: 'uppercase', fontWeight: 800, display: 'block' }}>Room No</span>
+                                                <span style={{ fontSize: '0.6875rem', color: 'var(--primary, #1A2517)', textTransform: 'uppercase', fontWeight: 800, display: 'block' }}>Room No</span>
                                                 <span>{ticket.room_no}</span>
                                             </div>
                                         )}
@@ -217,10 +243,10 @@ const TicketDetailsModal = ({
 
                             {/* Description */}
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                <label style={{ fontSize: '0.625rem', textTransform: 'uppercase', fontWeight: 900, color: '#000000', letterSpacing: '0.05em' }}>Detailed Description</label>
-                                <div className="ticket-description-card" style={{ padding: '1.5rem', backgroundColor: 'white', borderRadius: '1.5rem', border: '1px solid #e5e7eb', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
-                                    <p style={{ color: '#000000', lineHeight: 1.7, fontWeight: 500, whiteSpace: 'pre-wrap', fontSize: '0.95rem' }}>
-                                        {ticket.description || <span style={{ color: '#000000', fontStyle: 'italic' }}>No detailed description provided.</span>}
+                                <label style={{ fontSize: '0.625rem', textTransform: 'uppercase', fontWeight: 900, color: 'var(--text-primary, #333333)', letterSpacing: '0.05em' }}>Detailed Description</label>
+                                <div className="ticket-description-card" style={{ padding: '1.5rem', backgroundColor: 'var(--surface, #FFFFFF)', borderRadius: '1.5rem', border: '1px solid var(--border, #E5E7EB)', boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)' }}>
+                                    <p style={{ color: 'var(--text-primary, #333333)', lineHeight: 1.7, fontWeight: 500, whiteSpace: 'pre-wrap', fontSize: '0.95rem' }}>
+                                        {ticket.description || <span style={{ color: 'var(--text-primary, #333333)', fontStyle: 'italic' }}>No detailed description provided.</span>}
                                     </p>
                                 </div>
                             </div>
@@ -228,17 +254,17 @@ const TicketDetailsModal = ({
                             {/* Photo */}
                             {photoSrc && (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                    <label style={{ fontSize: '0.625rem', textTransform: 'uppercase', fontWeight: 900, color: '#000000', letterSpacing: '0.05em' }}>Attachment</label>
-                                    <div style={{ borderRadius: '1.5rem', overflow: 'hidden', border: '4px solid #f9fafb', boxShadow: 'inset 0 2px 4px 0 rgba(0,0,0,0.06)' }}>
-                                        <img src={photoSrc} alt="Ticket attachment" style={{ width: '100%', maxHeight: '400px', objectFit: 'contain', backgroundColor: '#f3f4f6' }} />
+                                    <label style={{ fontSize: '0.625rem', textTransform: 'uppercase', fontWeight: 900, color: 'var(--text-primary, #333333)', letterSpacing: '0.05em' }}>Attachment</label>
+                                    <div style={{ borderRadius: '1.5rem', overflow: 'hidden', border: '4px solid var(--background, #FAFAF5)', boxShadow: 'inset 0 2px 4px 0 rgba(0,0,0,0.06)' }}>
+                                        <img src={photoSrc} alt="Ticket attachment" style={{ width: '100%', maxHeight: '400px', objectFit: 'contain', backgroundColor: 'var(--background, #FAFAF5)' }} />
                                     </div>
                                 </div>
                             )}
 
                             {/* Comments */}
-                            <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: '2rem' }}>
+                            <div style={{ borderTop: '1px solid var(--border, #E5E7EB)', paddingTop: '2rem' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
-                                    <h3 style={{ fontSize: '1.125rem', fontWeight: 800, color: '#111827', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                    <h3 style={{ fontSize: '1.125rem', fontWeight: 800, color: 'var(--text-primary, #333333)', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                                         <MessageSquare size={20} className="text-gray-400" />
                                         Discussion History
                                     </h3>
@@ -248,22 +274,22 @@ const TicketDetailsModal = ({
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                                         {ticket.comments.map((comment) => (
                                             <div key={comment.id} style={{ display: 'flex', gap: '1rem' }}>
-                                                <div style={{ width: '2.5rem', height: '2.5rem', borderRadius: '50%', backgroundColor: comment.is_internal ? '#fef3c7' : '#e0f2fe', color: comment.is_internal ? '#d97706' : '#0284c7', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '0.875rem', flexShrink: 0 }}>
+                                                <div style={{ width: '2.5rem', height: '2.5rem', borderRadius: '50%', backgroundColor: comment.is_internal ? 'var(--warning-light, #FEFCE8)' : 'var(--primary-light, #E8EEE4)', color: comment.is_internal ? 'var(--warning, #A16207)' : 'var(--primary, #1A2517)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '0.875rem', flexShrink: 0 }}>
                                                     {comment.user_name.charAt(0)}
                                                 </div>
-                                                <div style={{ flex: 1, backgroundColor: comment.is_internal ? '#fffbeb' : '#f0f9ff', padding: '1rem', borderRadius: '0 1rem 1rem 1rem', border: `1px solid ${comment.is_internal ? '#fde68a' : '#e0f2fe'}` }}>
+                                                <div style={{ flex: 1, backgroundColor: comment.is_internal ? 'var(--warning-light, #FEFCE8)' : 'var(--primary-light, #E8EEE4)', padding: '1rem', borderRadius: '0 1rem 1rem 1rem', border: `1px solid ${comment.is_internal ? 'var(--warning-light, #FEFCE8)' : 'var(--primary-light, #E8EEE4)'}` }}>
                                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                                                        <span style={{ fontWeight: 700, color: '#1f2937', fontSize: '0.875rem' }}>{comment.user_name}</span>
-                                                        <span style={{ fontSize: '0.75rem', color: '#000000' }}>{new Date(comment.created_at).toLocaleString()}</span>
+                                                        <span style={{ fontWeight: 700, color: 'var(--text-primary, #333333)', fontSize: '0.875rem' }}>{comment.user_name}</span>
+                                                        <span style={{ fontSize: '0.75rem', color: 'var(--text-primary, #333333)' }}>{new Date(comment.created_at).toLocaleString()}</span>
                                                     </div>
-                                                    <p style={{ color: '#000000', fontSize: '0.875rem', lineHeight: 1.5 }}>{comment.comment_text}</p>
-                                                    {comment.is_internal && <div style={{ display: 'inline-block', marginTop: '0.5rem', fontSize: '0.625rem', fontWeight: 800, textTransform: 'uppercase', color: '#d97706', backgroundColor: '#fef3c7', padding: '0.25rem 0.5rem', borderRadius: '0.25rem' }}>Internal Note</div>}
+                                                    <p style={{ color: 'var(--text-primary, #333333)', fontSize: '0.875rem', lineHeight: 1.5 }}>{comment.comment_text}</p>
+                                                    {comment.is_internal && <div style={{ display: 'inline-block', marginTop: '0.5rem', fontSize: '0.625rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--warning, #A16207)', backgroundColor: 'var(--warning-light, #FEFCE8)', padding: '0.25rem 0.5rem', borderRadius: '0.25rem' }}>Internal Note</div>}
                                                 </div>
                                             </div>
                                         ))}
                                     </div>
                                 ) : (
-                                    <div style={{ padding: '2rem', textAlign: 'center', backgroundColor: '#f9fafb', borderRadius: '1rem', border: '1px dashed #e5e7eb', color: '#000000', fontSize: '0.875rem' }}>
+                                    <div style={{ padding: '2rem', textAlign: 'center', backgroundColor: 'var(--background, #FAFAF5)', borderRadius: '1rem', border: '1px dashed var(--border, #E5E7EB)', color: 'var(--text-primary, #333333)', fontSize: '0.875rem' }}>
                                         No comments yet. Start a discussion below.
                                     </div>
                                 )}
@@ -273,8 +299,8 @@ const TicketDetailsModal = ({
                         {/* Right Column: Actions & Meta */}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                             {/* Current Status */}
-                            <div className="ticket-action-card" style={{ padding: '1.5rem', backgroundColor: 'white', borderRadius: '1.5rem', border: '1px solid #e5e7eb', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)' }}>
-                                <label style={{ fontSize: '0.625rem', textTransform: 'uppercase', fontWeight: 900, color: '#000000', letterSpacing: '0.05em', marginBottom: '0.75rem', display: 'block' }}>Current Status</label>
+                            <div className="ticket-action-card" style={{ padding: '1.5rem', backgroundColor: 'var(--surface, #FFFFFF)', borderRadius: '1.5rem', border: '1px solid var(--border, #E5E7EB)', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)' }}>
+                                <label style={{ fontSize: '0.625rem', textTransform: 'uppercase', fontWeight: 900, color: 'var(--text-primary, #333333)', letterSpacing: '0.05em', marginBottom: '0.75rem', display: 'block' }}>Current Status</label>
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                     <span className={`status-badge ${STATUS_COLORS[ticket.status] || 'bg-gray-100'}`} style={{ padding: '0.5rem 1rem', borderRadius: '2rem', fontWeight: 700, fontSize: '0.875rem', display: 'inline-block' }}>
                                         {STATUS_LABELS[ticket.status] || ticket.status}
@@ -285,58 +311,150 @@ const TicketDetailsModal = ({
                                         aria-label="Update complaint status"
                                         value={statusForm.status || ticket.status}
                                         onChange={(event) => onStatusChange({ ...statusForm, status: event.target.value })}
+                                        disabled={isStatusLocked}
                                     >
                                         {Object.entries(STATUS_LABELS)
-                                            .filter(([status]) => status !== 'closed' || ticket.status === 'closed')
+                                            .filter(([status]) => status !== 'rejected' && (status !== 'closed' || ticket.status === 'closed'))
                                             .map(([status, label]) => <option key={status} value={status}>{label}</option>)}
                                     </select>
-                                    <button type="button" onClick={onStatusSubmit} disabled={statusUpdating}>
+                                    <button type="button" onClick={onStatusSubmit} disabled={statusUpdating || isStatusLocked}>
                                         {statusUpdating ? 'Updating...' : 'Update'}
                                     </button>
                                 </div>
+                                {isApprovalPending && (
+                                    <p className="ticket-inline-help">Status changes are locked until the approval flow finishes.</p>
+                                )}
+                                {isRejected && (
+                                    <p className="ticket-inline-help">Rejected complaints are terminal and cannot be reopened.</p>
+                                )}
                             </div>
 
+                            {approvalLoading && (
+                                <div className="ticket-action-card text-sm text-slate-500">Loading approval stages...</div>
+                            )}
+                            {approvalData && (
+                                <div className="ticket-action-card ticket-approval-card">
+                                    <div className="ticket-approval-heading">
+                                        <div>
+                                            <label className="ticket-inline-label">Approval flow</label>
+                                            <p className="ticket-approval-state">
+                                                {approvalData.state === 'pending'
+                                                    ? `Stage ${approvalData.current_stage_order} of ${approvalData.steps.length}`
+                                                    : approvalData.state === 'approved'
+                                                        ? 'All stages approved'
+                                                        : approvalData.state === 'rejected'
+                                                            ? 'Rejected'
+                                                            : 'Cancelled'}
+                                            </p>
+                                        </div>
+                                        {approvalData.current_stage && (
+                                            <span className="ticket-approval-group">
+                                                {APPROVAL_ROLE_LABELS[approvalData.current_stage.member_type] ||
+                                                    approvalData.current_stage.member_type}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <ol className="ticket-approval-steps">
+                                        {approvalData.steps.map((step) => (
+                                            <li key={step.id} className={`ticket-approval-step is-${step.state}`}>
+                                                <span className="ticket-approval-step-number">{step.stage_order}</span>
+                                                <span className="ticket-approval-step-info">
+                                                    <strong>{step.stage_name}</strong>
+                                                    <small>
+                                                        {APPROVAL_ROLE_LABELS[step.member_type] || step.member_type} · {step.state}
+                                                    </small>
+                                                    {step.decision_by_name && <small>By {step.decision_by_name}</small>}
+                                                    {step.decision_notes && <small className="ticket-approval-notes">{step.decision_notes}</small>}
+                                                </span>
+                                            </li>
+                                        ))}
+                                    </ol>
+                                    {approvalData.state === 'pending' && approvalData.can_act && (
+                                        <div className="ticket-approval-actions">
+                                            <label className="ticket-inline-label" htmlFor="ticket-rejection-reason">Decision note</label>
+                                            <textarea
+                                                id="ticket-rejection-reason"
+                                                value={rejectionReason}
+                                                onChange={(event) => setRejectionReason(event.target.value)}
+                                                placeholder="A reason is required to reject"
+                                                rows={3}
+                                            />
+                                            <div>
+                                                <button
+                                                    type="button"
+                                                    className="ticket-approval-approve"
+                                                    onClick={() => onApprovalDecision({ decision: 'approved', notes: rejectionReason.trim() })}
+                                                    disabled={approvalSaving}
+                                                >
+                                                    {approvalSaving ? 'Submitting...' : 'Approve'}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="ticket-approval-reject"
+                                                    onClick={() => onApprovalDecision({
+                                                        decision: 'rejected',
+                                                        notes: rejectionReason.trim()
+                                                    })}
+                                                    disabled={approvalSaving}
+                                                >
+                                                    Reject complaint
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {approvalData.state === 'pending' && !approvalData.can_act && (
+                                        <p className="ticket-inline-help">Waiting for an assigned member of this stage to decide.</p>
+                                    )}
+                                </div>
+                            )}
+
                             {/* Assigned Staff */}
-                            <div className="ticket-action-card" style={{ padding: '1.5rem', backgroundColor: 'white', borderRadius: '1.5rem', border: '1px solid #e5e7eb', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)' }}>
+                            <div className="ticket-action-card" style={{ padding: '1.5rem', backgroundColor: 'var(--surface, #FFFFFF)', borderRadius: '1.5rem', border: '1px solid var(--border, #E5E7EB)', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
-                                    <label style={{ fontSize: '0.625rem', textTransform: 'uppercase', fontWeight: 900, color: '#000000', letterSpacing: '0.05em' }}>Assigned Team</label>
-                                    <button
-                                        onClick={() => {
-                                            if (!showAssignmentEditor) onAssign();
-                                            setShowAssignmentEditor((visible) => !visible);
-                                        }}
-                                        style={{ color: '#2563eb', fontWeight: 600, fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem', cursor: 'pointer', background: 'none', border: 'none' }}
-                                    >
-                                        <UserPlus size={14} /> {showAssignmentEditor ? 'Close' : 'Manage'}
-                                    </button>
+                                    <label style={{ fontSize: '0.625rem', textTransform: 'uppercase', fontWeight: 900, color: 'var(--text-primary, #333333)', letterSpacing: '0.05em' }}>Assigned Team</label>
+                                    {canManageAssignments && (
+                                        <button
+                                            disabled={isAssignmentLocked}
+                                            onClick={() => {
+                                                if (!showAssignmentEditor) onAssign();
+                                                setShowAssignmentEditor((visible) => !visible);
+                                            }}
+                                            style={{ color: isAssignmentLocked ? 'var(--text-muted, #777777)' : 'var(--primary, #1A2517)', fontWeight: 600, fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem', cursor: isAssignmentLocked ? 'not-allowed' : 'pointer', background: 'none', border: 'none' }}
+                                        >
+                                            <UserPlus size={14} /> {showAssignmentEditor ? 'Close' : 'Manage'}
+                                        </button>
+                                    )}
                                 </div>
                                 {ticket.assignments && ticket.assignments.length > 0 ? (
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                                        {/* Managers List (Anyone who is NOT a worker) */}
+                                        {/* Managers List */}
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                            <label style={{ fontSize: '0.625rem', fontWeight: 800, color: '#000000', textTransform: 'uppercase' }}>Managers</label>
-                                            {ticket.assignments.filter(a => (a.assigned_to_role?.toLowerCase() !== 'worker')).length > 0 ? (
-                                                ticket.assignments.filter(a => (a.assigned_to_role?.toLowerCase() !== 'worker')).map((assignment) => (
-                                                    <div key={assignment.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', backgroundColor: '#f3e8ff', borderRadius: '0.75rem', border: '1px solid #e9d5ff' }}>
-                                                        <div style={{ width: '2rem', height: '2rem', borderRadius: '50%', backgroundColor: 'white', color: '#7e22ce', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '0.75rem', border: '1px solid #d8b4fe', flexShrink: 0 }}>
+                                            <label style={{ fontSize: '0.625rem', fontWeight: 800, color: 'var(--text-primary, #333333)', textTransform: 'uppercase' }}>Managers</label>
+                                            {ticket.assignments.filter(a => a.assigned_to_role?.toLowerCase() === 'manager').length > 0 ? (
+                                                ticket.assignments.filter(a => a.assigned_to_role?.toLowerCase() === 'manager').map((assignment) => (
+                                                    <div key={assignment.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', backgroundColor: 'var(--primary-light, #E8EEE4)', borderRadius: '0.75rem', border: '1px solid var(--primary-light, #E8EEE4)' }}>
+                                                        <div style={{ width: '2rem', height: '2rem', borderRadius: '50%', backgroundColor: 'var(--surface, #FFFFFF)', color: 'var(--accent, #A3B18A)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '0.75rem', border: '1px solid var(--primary-light, #E8EEE4)', flexShrink: 0 }}>
                                                             {(assignment.assigned_to_name || '?').charAt(0)}
                                                         </div>
                                                         <div style={{ flex: 1, minWidth: 0 }}>
-                                                            <p style={{ fontSize: '0.875rem', fontWeight: 700, color: '#1f2937' }}>{assignment.assigned_to_name || 'Unknown user'}</p>
+                                                            <p style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-primary, #333333)' }}>{assignment.assigned_to_name || 'Unknown user'}</p>
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                                <p style={{ fontSize: '0.625rem', fontWeight: 600, color: '#7e22ce', textTransform: 'uppercase' }}>
-                                                                    {assignment.assigned_to_role === 'staff' ? 'Manager' : assignment.assigned_to_role}
+                                                                <p style={{ fontSize: '0.625rem', fontWeight: 600, color: 'var(--accent, #A3B18A)', textTransform: 'uppercase' }}>
+                                                                    {assignment.assigned_to_role}
                                                                 </p>
-                                                                <span style={{ fontSize: '0.625rem', color: '#000000' }}>
+                                                                <span style={{ fontSize: '0.625rem', color: 'var(--text-primary, #333333)' }}>
                                                                     {new Date(assignment.assigned_at).toLocaleDateString()}
                                                                 </span>
                                                             </div>
+                                                            {assignment.assigned_to_phone && (
+                                                                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary, #555555)' }}>{assignment.assigned_to_phone}</p>
+                                                            )}
                                                         </div>
-                                                        {onRemoveAssignment && (
+                                                        {onRemoveAssignment && !isAssignmentLocked && (
                                                             <button
                                                                 onClick={() => handleRemoveAssignment(assignment)}
                                                                 title="Remove assignee"
-                                                                style={{ padding: '0.375rem', backgroundColor: 'white', color: '#dc2626', borderRadius: '50%', border: '1px solid #fecaca', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                                                                style={{ padding: '0.375rem', backgroundColor: 'var(--surface, #FFFFFF)', color: 'var(--danger, #B91C1C)', borderRadius: '50%', border: '1px solid var(--danger-light, #FEF2F2)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
                                                                 className=""
                                                             >
                                                                 <X size={14} />
@@ -345,33 +463,42 @@ const TicketDetailsModal = ({
                                                     </div>
                                                 ))
                                             ) : (
-                                                <p style={{ fontSize: '0.75rem', color: '#000000', fontStyle: 'italic', paddingLeft: '0.5rem' }}>No manager assigned</p>
+                                                <p style={{ fontSize: '0.75rem', color: 'var(--text-primary, #333333)', fontStyle: 'italic', paddingLeft: '0.5rem' }}>No manager assigned</p>
                                             )}
                                         </div>
 
                                         {/* Workers List */}
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                                            <label style={{ fontSize: '0.625rem', fontWeight: 800, color: '#000000', textTransform: 'uppercase' }}>Workers</label>
+                                            <label style={{ fontSize: '0.625rem', fontWeight: 800, color: 'var(--text-primary, #333333)', textTransform: 'uppercase' }}>Workers</label>
                                             {ticket.assignments.filter(a => (a.assigned_to_role?.toLowerCase() === 'worker')).length > 0 ? (
                                                 ticket.assignments.filter(a => (a.assigned_to_role?.toLowerCase() === 'worker')).map((assignment) => (
-                                                    <div key={assignment.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', backgroundColor: '#eff6ff', borderRadius: '0.75rem', border: '1px solid #dbeafe' }}>
-                                                        <div style={{ width: '2rem', height: '2rem', borderRadius: '50%', backgroundColor: 'white', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '0.75rem', border: '1px solid #bfdbfe', flexShrink: 0 }}>
+                                                    <div key={assignment.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', backgroundColor: 'var(--primary-light, #E8EEE4)', borderRadius: '0.75rem', border: '1px solid var(--primary-light, #E8EEE4)' }}>
+                                                        <div style={{ width: '2rem', height: '2rem', borderRadius: '50%', backgroundColor: 'var(--surface, #FFFFFF)', color: 'var(--primary, #1A2517)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '0.75rem', border: '1px solid var(--primary-light, #E8EEE4)', flexShrink: 0 }}>
                                                             {(assignment.assigned_to_name || '?').charAt(0)}
                                                         </div>
                                                         <div style={{ flex: 1, minWidth: 0 }}>
-                                                            <p style={{ fontSize: '0.875rem', fontWeight: 700, color: '#1f2937' }}>{assignment.assigned_to_name || 'Unknown user'}</p>
+                                                            <p style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-primary, #333333)' }}>{assignment.assigned_to_name || 'Unknown user'}</p>
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                                                <p style={{ fontSize: '0.625rem', fontWeight: 600, color: '#2563eb', textTransform: 'uppercase' }}>Worker</p>
-                                                                <span style={{ fontSize: '0.625rem', color: '#000000' }}>
+                                                                <p style={{ fontSize: '0.625rem', fontWeight: 600, color: 'var(--primary, #1A2517)', textTransform: 'uppercase' }}>
+                                                                    {assignment.assignment_type === 'hrms'
+                                                                        ? 'HRMS employee'
+                                                                        : assignment.assignment_type === 'external'
+                                                                            ? 'External worker'
+                                                                            : 'Worker'}
+                                                                </p>
+                                                                <span style={{ fontSize: '0.625rem', color: 'var(--text-primary, #333333)' }}>
                                                                     {new Date(assignment.assigned_at).toLocaleDateString()}
                                                                 </span>
                                                             </div>
+                                                            {assignment.assigned_to_phone && (
+                                                                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary, #555555)' }}>{assignment.assigned_to_phone}</p>
+                                                            )}
                                                         </div>
-                                                        {onRemoveAssignment && (
+                                                        {onRemoveAssignment && !isAssignmentLocked && (
                                                             <button
                                                                 onClick={() => handleRemoveAssignment(assignment)}
                                                                 title="Remove assignee"
-                                                                style={{ padding: '0.375rem', backgroundColor: 'white', color: '#dc2626', borderRadius: '50%', border: '1px solid #fecaca', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                                                                style={{ padding: '0.375rem', backgroundColor: 'var(--surface, #FFFFFF)', color: 'var(--danger, #B91C1C)', borderRadius: '50%', border: '1px solid var(--danger-light, #FEF2F2)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
                                                                 className=""
                                                             >
                                                                 <X size={14} />
@@ -380,89 +507,200 @@ const TicketDetailsModal = ({
                                                     </div>
                                                 ))
                                             ) : (
-                                                <p style={{ fontSize: '0.75rem', color: '#000000', fontStyle: 'italic', paddingLeft: '0.5rem' }}>No workers assigned</p>
+                                                <p style={{ fontSize: '0.75rem', color: 'var(--text-primary, #333333)', fontStyle: 'italic', paddingLeft: '0.5rem' }}>No workers assigned</p>
                                             )}
                                         </div>
                                     </div>
                                 ) : (
-                                    <div style={{ textAlign: 'center', padding: '1.5rem', backgroundColor: '#f9fafb', borderRadius: '0.75rem', border: '1px dashed #e5e7eb' }}>
+                                    <div style={{ textAlign: 'center', padding: '1.5rem', backgroundColor: 'var(--background, #FAFAF5)', borderRadius: '0.75rem', border: '1px dashed var(--border, #E5E7EB)' }}>
                                         <User size={20} className="text-gray-300 mx-auto mb-2" />
-                                        <p style={{ fontSize: '0.75rem', color: '#000000' }}>No staff assigned</p>
+                                        <p style={{ fontSize: '0.75rem', color: 'var(--text-primary, #333333)' }}>No staff assigned</p>
                                     </div>
                                 )}
-                                {showAssignmentEditor && (
+                                {canManageAssignments && showAssignmentEditor && !isAssignmentLocked && (
                                     <div className="ticket-inline-editor">
                                         <div className="ticket-inline-tabs">
-                                            <button type="button" className={assignTab === 'managers' ? 'active' : ''} onClick={() => onAssignTabChange('managers')}>
+                                            <button type="button" className={assignTab === 'managers' ? 'active' : ''} onClick={() => changeAssignTab('managers')}>
                                                 Managers ({managersList.length})
                                             </button>
-                                            <button type="button" className={assignTab === 'workers' ? 'active' : ''} onClick={() => onAssignTabChange('workers')}>
+                                            <button type="button" className={assignTab === 'workers' ? 'active' : ''} onClick={() => changeAssignTab('workers')}>
                                                 Workers ({workersList.length})
                                             </button>
+                                            <button type="button" className={assignTab === 'hrms' ? 'active' : ''} onClick={() => changeAssignTab('hrms')}>
+                                                HRMS employees
+                                            </button>
+                                            <button type="button" className={assignTab === 'external' ? 'active' : ''} onClick={() => changeAssignTab('external')}>
+                                                External worker
+                                            </button>
                                         </div>
-                                        <label className="ticket-inline-search">
-                                            <Search size={15} aria-hidden="true" />
-                                            <input
-                                                type="search"
-                                                value={assigneeSearch}
-                                                onChange={(event) => setAssigneeSearch(event.target.value)}
-                                                placeholder={`Search ${assignTab} by name, ID, or role`}
-                                                aria-label={`Search ${assignTab}`}
-                                            />
-                                        </label>
-                                        <div className="ticket-inline-assignee-list">
-                                            {visibleAssignees.map((person) => {
-                                                const personId = person.rbac_user_id || person.id;
-                                                const checked = assignForm.assigned_to.includes(personId);
-                                                const assignedCategories = Array.isArray(person.assigned_categories)
-                                                    ? person.assigned_categories.map(String)
-                                                    : [];
-                                                const assignedSubcategories = Array.isArray(person.assigned_subcategories)
-                                                    ? person.assigned_subcategories.map(String)
-                                                    : [];
-                                                const hasScope = assignedCategories.length > 0 || assignedSubcategories.length > 0;
-                                                const matchesSubcategory = ticket.sub_category_id != null &&
-                                                    assignedSubcategories.includes(String(ticket.sub_category_id));
-                                                const matchesCategory = ticket.category_id != null &&
-                                                    assignedCategories.includes(String(ticket.category_id));
-                                                const scopeLabel = matchesSubcategory
-                                                    ? 'Sub-category match'
-                                                    : matchesCategory
-                                                        ? 'Category match'
-                                                        : hasScope
-                                                            ? 'Other category'
-                                                            : 'General scope';
-                                                return (
-                                                    <label
-                                                        key={person.id}
-                                                        className={`ticket-inline-assignee ${matchesSubcategory || matchesCategory ? 'is-scope-match' : ''}`}
-                                                    >
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={checked}
-                                                            onChange={() => onAssignToggle(personId)}
-                                                        />
-                                                        <span className="ticket-inline-assignee-info">
-                                                            <strong>{person.name}</strong>
-                                                            <small>{person.role_display_name || person.role || person.username}</small>
-                                                            <small className={`ticket-inline-scope ${matchesSubcategory || matchesCategory ? 'is-match' : ''}`}>
-                                                                {scopeLabel}
-                                                            </small>
-                                                        </span>
-                                                        <small className="ticket-inline-workload">
-                                                            {person.active_tickets_count || 0} active
-                                                        </small>
-                                                    </label>
-                                                );
-                                            })}
-                                            {visibleAssignees.length === 0 && (
-                                                <p className="ticket-inline-empty">
-                                                    {assigneeSearch.trim() ? `No ${assignTab} match your search.` : `No ${assignTab} found.`}
-                                                </p>
-                                            )}
-                                        </div>
+                                        {assignTab === 'hrms' ? (
+                                            <>
+                                                <label className="ticket-inline-search">
+                                                    <Search size={15} aria-hidden="true" />
+                                                    <input
+                                                        type="search"
+                                                        value={assigneeSearch}
+                                                        onChange={(event) => {
+                                                            setAssigneeSearch(event.target.value);
+                                                            onHrmsSearchChange(event.target.value);
+                                                        }}
+                                                        placeholder="Search HRMS by name, employee number, or phone"
+                                                        aria-label="Search HRMS employees"
+                                                    />
+                                                </label>
+                                                {hrmsEmployeesError && <p className="ticket-inline-empty">HRMS employee search is unavailable.</p>}
+                                                {hrmsEmployeesLoading && <p className="ticket-inline-empty">Searching HRMS...</p>}
+                                                <div className="ticket-inline-assignee-list">
+                                                    {hrmsEmployees.map((employee) => {
+                                                        const selected = (assignForm.hrms_assignees || []).some((item) =>
+                                                            String(item.hrms_id) === String(employee.id)
+                                                        );
+                                                        return (
+                                                            <label key={employee.id} className="ticket-inline-assignee">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={selected}
+                                                                    onChange={() => {
+                                                                        const current = assignForm.hrms_assignees || [];
+                                                                        const next = selected
+                                                                            ? current.filter((item) => String(item.hrms_id) !== String(employee.id))
+                                                                            : [...current, {
+                                                                                hrms_id: employee.id,
+                                                                                employee_no: employee.emp_no,
+                                                                                name: employee.name,
+                                                                                phone: employee.phone
+                                                                            }];
+                                                                        setAssignForm({ ...assignForm, hrms_assignees: next });
+                                                                    }}
+                                                                />
+                                                                <span className="ticket-inline-assignee-info">
+                                                                    <strong>{employee.name}</strong>
+                                                                    <small>{employee.emp_no || 'HRMS employee'}{employee.phone ? ` · ${employee.phone}` : ''}</small>
+                                                                </span>
+                                                            </label>
+                                                        );
+                                                    })}
+                                                    {!hrmsEmployeesLoading && !hrmsEmployeesError && hrmsEmployees.length === 0 && (
+                                                        <p className="ticket-inline-empty">
+                                                            {assigneeSearch.trim().length < 2
+                                                                ? 'Enter at least 2 characters to search the HRMS directory.'
+                                                                : 'No matching HRMS employees found.'}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            </>
+                                        ) : assignTab === 'external' ? (
+                                            <div className="space-y-3">
+                                                <p className="ticket-inline-empty">For workers who are not listed in HRMS, enter their name and phone number.</p>
+                                                <label className="grid gap-1 text-xs font-semibold text-slate-700">
+                                                    Worker name
+                                                    <input value={externalName} onChange={(event) => setExternalName(event.target.value)} maxLength={150} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                                                </label>
+                                                <label className="grid gap-1 text-xs font-semibold text-slate-700">
+                                                    Phone number
+                                                    <input type="tel" value={externalPhone} onChange={(event) => setExternalPhone(event.target.value)} maxLength={20} className="rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+                                                </label>
+                                                <button
+                                                    type="button"
+                                                    className="ticket-inline-submit"
+                                                    onClick={() => {
+                                                        const name = externalName.trim();
+                                                        const phone = externalPhone.trim();
+                                                        const digits = phone.replace(/\D/g, '');
+                                                        if (!name || name.length > 150 || digits.length < 7 || digits.length > 15 || !/^[+0-9().\-\s]+$/.test(phone)) {
+                                                            return toast.error('Enter the worker name and a valid phone number.');
+                                                        }
+                                                        setAssignForm({
+                                                            ...assignForm,
+                                                            external_assignees: [...(assignForm.external_assignees || []), { name, phone }]
+                                                        });
+                                                        setExternalName('');
+                                                        setExternalPhone('');
+                                                    }}
+                                                >
+                                                    Add external worker
+                                                </button>
+                                                {(assignForm.external_assignees || []).map((person, index) => (
+                                                    <div key={`${person.phone}-${index}`} className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-sm">
+                                                        <span>{person.name} · {person.phone}</span>
+                                                        <button type="button" onClick={() => setAssignForm({
+                                                            ...assignForm,
+                                                            external_assignees: assignForm.external_assignees.filter((_, itemIndex) => itemIndex !== index)
+                                                        })} className="text-red-600" aria-label={`Remove ${person.name}`}>Remove</button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <label className="ticket-inline-search">
+                                                    <Search size={15} aria-hidden="true" />
+                                                    <input
+                                                        type="search"
+                                                        value={assigneeSearch}
+                                                        onChange={(event) => setAssigneeSearch(event.target.value)}
+                                                        placeholder={`Search ${assignTab} by name, ID, or role`}
+                                                        aria-label={`Search ${assignTab}`}
+                                                    />
+                                                </label>
+                                                <div className="ticket-inline-assignee-list">
+                                                    {visibleAssignees.map((person) => {
+                                                        const personId = person.rbac_user_id || person.id;
+                                                        const checked = assignForm.assigned_to.includes(personId);
+                                                        const assignedCategories = Array.isArray(person.assigned_categories)
+                                                            ? person.assigned_categories.map(String)
+                                                            : [];
+                                                        const assignedSubcategories = Array.isArray(person.assigned_subcategories)
+                                                            ? person.assigned_subcategories.map(String)
+                                                            : [];
+                                                        const hasScope = assignedCategories.length > 0 || assignedSubcategories.length > 0;
+                                                        const matchesSubcategory = ticket.sub_category_id != null &&
+                                                            assignedSubcategories.includes(String(ticket.sub_category_id));
+                                                        const matchesCategory = ticket.category_id != null &&
+                                                            assignedCategories.includes(String(ticket.category_id));
+                                                        const scopeLabel = matchesSubcategory
+                                                            ? 'Sub-category match'
+                                                            : matchesCategory
+                                                                ? 'Category match'
+                                                                : hasScope
+                                                                    ? 'Other category'
+                                                                    : 'General scope';
+                                                        return (
+                                                            <label
+                                                                key={person.id}
+                                                                className={`ticket-inline-assignee ${matchesSubcategory || matchesCategory ? 'is-scope-match' : ''}`}
+                                                            >
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={checked}
+                                                                    onChange={() => onAssignToggle(personId)}
+                                                                />
+                                                                <span className="ticket-inline-assignee-info">
+                                                                    <strong>{person.name}</strong>
+                                                                    <small>{person.role_display_name || person.role || person.username}</small>
+                                                                    <small className={`ticket-inline-scope ${matchesSubcategory || matchesCategory ? 'is-match' : ''}`}>
+                                                                        {scopeLabel}
+                                                                    </small>
+                                                                </span>
+                                                                <small className="ticket-inline-workload">
+                                                                    {person.active_tickets_count || 0} active
+                                                                </small>
+                                                            </label>
+                                                        );
+                                                    })}
+                                                    {visibleAssignees.length === 0 && (
+                                                        <p className="ticket-inline-empty">
+                                                            {assigneeSearch.trim() ? `No ${assignTab} match your search.` : `No ${assignTab} found.`}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            </>
+                                        )}
                                         <button type="button" className="ticket-inline-submit" onClick={onAssignSubmit} disabled={assignSaving}>
-                                            {assignSaving ? 'Saving...' : assignForm.assigned_to.length ? 'Save assignments' : 'Unassign all'}
+                                            {assignSaving ? 'Saving...' : (
+                                                (assignForm.assigned_to.length || assignForm.hrms_assignees?.length || assignForm.external_assignees?.length)
+                                                    ? 'Save assignments'
+                                                    : 'Unassign all'
+                                            )}
                                         </button>
                                     </div>
                                 )}
@@ -470,17 +708,35 @@ const TicketDetailsModal = ({
 
                             {/* Feedback (if exists) */}
                             {ticket.feedback && (
-                                <div style={{ padding: '1.5rem', backgroundColor: '#f0fdf4', borderRadius: '1.5rem', border: '1px solid #bbf7d0' }}>
-                                    <label style={{ fontSize: '0.625rem', textTransform: 'uppercase', fontWeight: 900, color: '#15803d', letterSpacing: '0.05em', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
-                                        <Star size={12} fill="currentColor" /> Student Feedback
+                                <div style={{
+                                    padding: '1.5rem',
+                                    backgroundColor: feedbackSatisfaction === false ? 'var(--danger-light, #FEF2F2)' : 'var(--success-light, #F0FDF4)',
+                                    borderRadius: '1.5rem',
+                                    border: `1px solid ${feedbackSatisfaction === false ? 'var(--danger-light, #FEF2F2)' : 'var(--success-light, #F0FDF4)'}`
+                                }}>
+                                    <label style={{
+                                        fontSize: '0.625rem',
+                                        textTransform: 'uppercase',
+                                        fontWeight: 900,
+                                        color: feedbackSatisfaction === false ? 'var(--danger, #B91C1C)' : 'var(--success, #15803D)',
+                                        letterSpacing: '0.05em',
+                                        marginBottom: '0.75rem',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.375rem'
+                                    }}>
+                                        <MessageSquare size={12} /> Student Feedback
                                     </label>
-                                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', marginBottom: '0.75rem' }}>
-                                        <span style={{ fontSize: '2rem', fontWeight: 900, color: '#166534', lineHeight: 1 }}>{ticket.feedback.rating}</span>
-                                        <span style={{ fontSize: '0.875rem', fontWeight: 700, color: '#15803d', opacity: 0.7 }}>/ 5.0</span>
+                                    <div style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.5rem',
+                                        color: feedbackSatisfaction === false ? 'var(--danger, #B91C1C)' : 'var(--success, #15803D)',
+                                        fontWeight: 700
+                                    }}>
+                                        {feedbackSatisfaction === false ? <XCircle size={18} /> : <CheckCircle size={18} />}
+                                        <span>{feedbackSatisfaction === false ? 'Not satisfied' : 'Satisfied'}</span>
                                     </div>
-                                    {ticket.feedback.feedback_text && (
-                                        <p style={{ fontSize: '0.875rem', color: '#14532d', fontStyle: 'italic', fontWeight: 500 }}>"{ticket.feedback.feedback_text}"</p>
-                                    )}
                                 </div>
                             )}
 
@@ -514,7 +770,7 @@ const TicketDetailsModal = ({
                                 ) : (
                                     <button
                                         onClick={() => setShowResponseEditor(true)}
-                                        style={{ width: '100%', padding: '1rem', backgroundColor: '#111827', color: 'white', borderRadius: '1rem', fontWeight: 700, fontSize: '0.95rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', cursor: 'pointer' }}
+                                        style={{ width: '100%', padding: '1rem', backgroundColor: 'var(--primary, #1A2517)', color: 'white', borderRadius: '1rem', fontWeight: 700, fontSize: '0.95rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', cursor: 'pointer' }}
                                     >
                                         <MessageSquare size={18} />
                                         Add Response

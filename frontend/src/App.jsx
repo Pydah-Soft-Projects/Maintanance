@@ -44,7 +44,7 @@ const ProtectedRoute = ({ children, allowedRoles, requiredPermission }) => {
   if (allowedRoles) {
     const isRequesterRoute = allowedRoles.includes('student') || allowedRoles.includes('requester');
     const isAdminRoute = allowedRoles.includes('admin');
-    const isSuperAdminOrAdmin = user?.role === 'super_admin' || user?.role === 'admin';
+    const isSuperAdminOrAdmin = user?.role === 'super_admin';
 
     if (isRequesterRoute && !['student', 'requester'].includes(userType) && !isSuperAdminOrAdmin) {
       return <Navigate to={user?.role === 'worker' || user?.is_worker ? '/task-management' : '/dashboard'} replace />;
@@ -84,7 +84,7 @@ const DashboardRoute = () => {
 
 const AdminOnlyRoute = ({ children }) => {
   const { user } = useAuthStore();
-  const isAdmin = user?.role === 'super_admin' || user?.role === 'admin';
+  const isAdmin = user?.role === 'super_admin';
   if (!isAdmin) {
     return <Navigate to="/task-management" replace />;
   }
@@ -93,6 +93,25 @@ const AdminOnlyRoute = ({ children }) => {
 
 const App = () => {
   const { isLoading } = useAuthStore();
+
+  useEffect(() => {
+    const updateThemeColor = () => {
+      const primary = getComputedStyle(document.documentElement).getPropertyValue('--primary').trim();
+      const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+
+      if (primary && themeColorMeta) {
+        themeColorMeta.setAttribute('content', primary);
+      }
+    };
+    const handleThemeUpdate = (event) => {
+      console.info('Central theme updated:', event.detail?.version);
+      updateThemeColor();
+    };
+
+    updateThemeColor();
+    window.addEventListener('theme:updated', handleThemeUpdate);
+    return () => window.removeEventListener('theme:updated', handleThemeUpdate);
+  }, []);
 
   useEffect(() => {
     const { token, verifyToken } = useAuthStore.getState();
@@ -116,8 +135,8 @@ const App = () => {
         toastOptions={{
           duration: 3000,
           style: {
-            background: '#363636',
-            color: '#fff',
+            background: 'var(--surface, #FFFFFF)',
+            color: 'var(--text-primary, #333333)',
           },
         }}
       />

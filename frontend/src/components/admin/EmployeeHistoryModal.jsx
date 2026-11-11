@@ -188,7 +188,7 @@ const EmployeeHistoryModal = ({ isOpen, onClose, employee }) => {
                 </div>
 
                 {/* Content */}
-                <div className="p-8 overflow-y-auto custom-scrollbar flex-1 bg-gray-50" style={{ backgroundColor: '#F9FAFB' }}>
+                <div className="p-8 overflow-y-auto custom-scrollbar flex-1 bg-gray-50" style={{ backgroundColor: 'var(--background, #FAFAF5)' }}>
                     {loading ? (
                         <div className="flex items-center justify-center h-full min-h-[400px]">
                             <div className="flex flex-col items-center gap-4">

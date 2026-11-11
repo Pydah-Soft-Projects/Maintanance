@@ -77,7 +77,7 @@ const AuthCallback = () => {
                 toast.success(fromHrms ? 'Signed in from HRMS' : 'Signed in from Portal');
 
                 const userType = resolveUserType(user);
-                const isSuperAdminOrAdmin = user.role === 'super_admin' || user.role === 'admin' || userType === 'admin';
+                const isSuperAdminOrAdmin = user.role === 'super_admin' || userType === 'admin';
                 const isRequester = !isSuperAdminOrAdmin && (fromHrms || user.role === 'student' || userType === 'requester');
                 const redirectParam = searchParams.get('redirect');
                 const defaultPath = isSuperAdminOrAdmin ? '/dashboard' : (isRequester ? '/student/dashboard' : '/dashboard');

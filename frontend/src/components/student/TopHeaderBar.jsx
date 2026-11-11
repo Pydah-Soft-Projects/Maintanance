@@ -25,7 +25,7 @@ const TopHeaderBar = () => {
     const initialLetter = displayName.charAt(0).toUpperCase() || 'U';
 
     return (
-        <header className="sticky -top-4 lg:-top-6 z-30 bg-[#f8fafc]/95 backdrop-blur-md flex items-center justify-between py-2.5 px-4 lg:px-8 -mx-4 lg:-mx-8 -mt-4 lg:-mt-6 mb-6 transition-all border-b border-slate-200/70 shadow-2xs min-h-[56px]">
+        <header className="sticky -top-4 lg:-top-6 z-30 bg-navbar/95 backdrop-blur-md flex items-center justify-between py-2.5 px-4 lg:px-8 -mx-4 lg:-mx-8 -mt-4 lg:-mt-6 mb-6 transition-all border-b border-slate-200/70 shadow-2xs min-h-[56px]">
             {/* Left: Portal mark and greeting */}
             <div className="flex items-center gap-3 shrink-0 min-w-0">
                 <button
@@ -46,7 +46,7 @@ const TopHeaderBar = () => {
 
             {/* Right: Quick Portal Status Badge & Profile Initial Avatar */}
             <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
-                {(user?.role === 'super_admin' || user?.role === 'admin') && (
+                {user?.role === 'super_admin' && (
                     <button
                         onClick={() => navigate('/dashboard')}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600   text-white text-xs font-semibold shadow-xs  transition-all cursor-pointer"
@@ -64,7 +64,7 @@ const TopHeaderBar = () => {
 
                 {/* Profile Initial Avatar */}
                 <div
-                    className="w-8 h-8 sm:w-9 sm:h-9 shrink-0 aspect-square rounded-full bg-[#2563eb] text-white flex items-center justify-center shadow-xs border-2 border-blue-200 font-bold text-xs sm:text-sm uppercase select-none cursor-pointer  transition-colors"
+                    className="w-8 h-8 sm:w-9 sm:h-9 shrink-0 aspect-square rounded-full bg-primary text-white flex items-center justify-center shadow-xs border-2 border-primary-200 font-bold text-xs sm:text-sm uppercase select-none cursor-pointer  transition-colors"
                     title={displayName}
                 >
                     {user?.student_photo ? (

@@ -6,20 +6,22 @@ import {
     UserPlus,
     Edit,
     Eye,
-    Star,
+    CheckCircle,
     MessageSquare,
     XCircle
 } from 'lucide-react';
 import api from '../config/api';
 import toast from 'react-hot-toast';
 import { TicketManagementSkeleton } from '../components/SkeletonLoader';
+import { getFeedbackSatisfaction } from '../utils/ticketFeedback';
 
 const STATUS_COLORS = {
     pending: 'bg-yellow-100 text-yellow-800 border-yellow-200',
     approaching: 'bg-blue-100 text-blue-800 border-blue-200',
     resolving: 'bg-purple-100 text-purple-800 border-purple-200',
     completed: 'bg-green-100 text-green-800 border-green-200',
-    closed: 'bg-gray-100 text-gray-800 border-gray-200'
+    closed: 'bg-gray-100 text-gray-800 border-gray-200',
+    rejected: 'bg-red-100 text-red-800 border-red-200'
 };
 
 const STATUS_LABELS = {
@@ -27,7 +29,8 @@ const STATUS_LABELS = {
     approaching: 'Approaching',
     resolving: 'Resolving',
     completed: 'Completed',
-    closed: 'Closed'
+    closed: 'Closed',
+    rejected: 'Rejected'
 };
 
 const TicketManagement = () => {
@@ -74,7 +77,7 @@ const TicketManagement = () => {
                 id: emp.rbac_user_id, // Use RBAC ID for assignment FK
                 name: emp.name,
                 username: emp.username,
-                role: emp.role // 'staff' or 'worker'
+                role: emp.role // 'manager' or 'worker'
             })) || [];
         }
     });
@@ -467,14 +470,14 @@ const TicketStepper = ({ status }) => {
     return (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative', margin: '1rem 0 2rem 0' }}>
             {/* Progress Bar Background */}
-            <div style={{ position: 'absolute', top: '1.25rem', left: '0', right: '0', height: '0.25rem', backgroundColor: '#eff6ff', zIndex: 0 }}></div>
+            <div style={{ position: 'absolute', top: '1.25rem', left: '0', right: '0', height: '0.25rem', backgroundColor: 'var(--primary-light, #E8EEE4)', zIndex: 0 }}></div>
             {/* Active Progress Bar */}
             <div style={{
                 position: 'absolute',
                 top: '1.25rem',
                 left: '0',
                 height: '0.25rem',
-                backgroundColor: '#2563eb',
+                backgroundColor: 'var(--primary, #1A2517)',
                 zIndex: 0,
                 width: `${(currentStepIndex / (steps.length - 1)) * 100}%`,
                 transition: 'width 0.5s ease'
@@ -490,14 +493,14 @@ const TicketStepper = ({ status }) => {
                             width: '2.5rem',
                             height: '2.5rem',
                             borderRadius: '50%',
-                            backgroundColor: isCompleted ? '#2563eb' : '#eff6ff',
-                            border: isCurrent ? '4px solid #dbeafe' : '4px solid white',
+                            backgroundColor: isCompleted ? 'var(--primary, #1A2517)' : 'var(--primary-light, #E8EEE4)',
+                            border: isCurrent ? '4px solid var(--primary-100, #E8EEE4)' : '4px solid white',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            color: isCompleted ? 'white' : '#9ca3af',
+                            color: isCompleted ? 'white' : 'var(--text-muted, #777777)',
                             transition: 'all 0.3s ease',
-                            boxShadow: isCurrent ? '0 0 0 2px #2563eb' : 'none'
+                            boxShadow: isCurrent ? '0 0 0 2px var(--primary, #1A2517)' : 'none'
                         }}>
                             {/* CheckCircle icon or number */}
                             {isCompleted ? (
@@ -509,7 +512,7 @@ const TicketStepper = ({ status }) => {
                         <span style={{
                             fontSize: '0.75rem',
                             fontWeight: 700,
-                            color: isCompleted ? '#111827' : '#9ca3af',
+                            color: isCompleted ? 'var(--text-primary, #333333)' : 'var(--text-muted, #777777)',
                             textAlign: 'center'
                         }}>
                             {step.label}
@@ -523,6 +526,8 @@ const TicketStepper = ({ status }) => {
 
 // Ticket Details Modal Component
 const TicketDetailsModal = ({ ticket, onClose, onAssign, onStatusUpdate, onAddComment }) => {
+    const feedbackSatisfaction = getFeedbackSatisfaction(ticket.feedback);
+
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
@@ -581,8 +586,8 @@ const TicketDetailsModal = ({ ticket, onClose, onAssign, onStatusUpdate, onAddCo
                                 <div>
                                     <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Managers</h4>
                                     <div className="space-y-2">
-                                        {ticket.assignments.filter(a => a.assigned_to_role === 'staff').length > 0 ? (
-                                            ticket.assignments.filter(a => a.assigned_to_role === 'staff').map((assignment) => (
+                                        {ticket.assignments.filter(a => a.assigned_to_role === 'manager').length > 0 ? (
+                                            ticket.assignments.filter(a => a.assigned_to_role === 'manager').map((assignment) => (
                                                 <div key={assignment.id} className="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-100">
                                                     <div>
                                                         <p className="font-medium text-gray-900">{assignment.assigned_to_name}</p>
@@ -647,14 +652,15 @@ const TicketDetailsModal = ({ ticket, onClose, onAssign, onStatusUpdate, onAddCo
                     {ticket.feedback && (
                         <div>
                             <h3 className="text-lg font-semibold text-gray-900 mb-3">Feedback</h3>
-                            <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-                                <div className="flex items-center gap-2 mb-2">
-                                    <Star className="text-yellow-500 fill-yellow-500" size={20} />
-                                    <span className="font-semibold text-gray-900">{ticket.feedback.rating}/5</span>
+                            <div className={`p-4 rounded-lg border ${
+                                feedbackSatisfaction === false
+                                    ? 'bg-red-50 border-red-200 text-red-800'
+                                    : 'bg-green-50 border-green-200 text-green-800'
+                            }`}>
+                                <div className="flex items-center gap-2 font-semibold">
+                                    {feedbackSatisfaction === false ? <XCircle size={20} /> : <CheckCircle size={20} />}
+                                    <span>{feedbackSatisfaction === false ? 'Not satisfied' : 'Satisfied'}</span>
                                 </div>
-                                {ticket.feedback.feedback_text && (
-                                    <p className="text-gray-700">{ticket.feedback.feedback_text}</p>
-                                )}
                             </div>
                         </div>
                     )}
@@ -784,9 +790,11 @@ const StatusModal = ({ ticket, form, setForm, onClose, onUpdate, loading }) => {
                             onChange={(e) => setForm({ ...form, status: e.target.value })}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         >
-                            {Object.entries(STATUS_LABELS).map(([value, label]) => (
+                            {Object.entries(STATUS_LABELS)
+                                .filter(([value]) => value !== 'rejected')
+                                .map(([value, label]) => (
                                 <option key={value} value={value}>{label}</option>
-                            ))}
+                                ))}
                         </select>
                     </div>
                     <div>

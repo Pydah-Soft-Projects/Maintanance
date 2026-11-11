@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const ticketController = require('../controllers/ticketController');
+const ticketApprovalController = require('../controllers/ticketApprovalController');
+const employeeController = require('../controllers/employeeController');
 const authMiddleware = require('../middleware/auth');
 const { verifyPermission, verifyRole } = require('../middleware/rbac');
 const { MODULES, PERMISSIONS, USER_ROLES } = require('../constants/rbac');
@@ -43,6 +45,12 @@ router.get(
 );
 
 router.get(
+    '/hrms-assignees',
+    verifyPermission(MODULES.TICKET_MANAGEMENT, PERMISSIONS.WRITE),
+    employeeController.getHrmsEmployees
+);
+
+router.get(
     '/student',
     ticketController.getStudentTickets
 );
@@ -62,6 +70,18 @@ router.delete(
     '/:id/assign/:assignmentId',
     verifyPermission(MODULES.TICKET_MANAGEMENT, PERMISSIONS.WRITE),
     ticketController.removeAssignment
+);
+
+router.get(
+    '/:id/approvals',
+    verifyPermission(MODULES.TICKET_MANAGEMENT, PERMISSIONS.READ),
+    ticketApprovalController.getApprovalDetails
+);
+
+router.post(
+    '/:id/approval-decision',
+    verifyPermission(MODULES.TICKET_MANAGEMENT, 'update'),
+    ticketApprovalController.decideApproval
 );
 
 router.put(

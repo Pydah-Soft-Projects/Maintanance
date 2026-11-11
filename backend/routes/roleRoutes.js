@@ -20,21 +20,21 @@ router.get('/:id', roleController.getRole);
 // Create new role (Admin only)
 router.post(
     '/',
-    verifyRole(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN),
+    verifyRole(USER_ROLES.SUPER_ADMIN),
     roleController.createRole
 );
 
 // Update role (Admin only)
 router.put(
     '/:id',
-    verifyRole(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN),
+    verifyRole(USER_ROLES.SUPER_ADMIN),
     roleController.updateRole
 );
 
 // Delete role (Admin only)
 router.delete(
     '/:id',
-    verifyRole(USER_ROLES.SUPER_ADMIN, USER_ROLES.ADMIN),
+    verifyRole(USER_ROLES.SUPER_ADMIN),
     roleController.deleteRole
 );
 

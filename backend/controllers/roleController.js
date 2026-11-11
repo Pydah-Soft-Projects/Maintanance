@@ -23,18 +23,6 @@ const normalizeRolePermissions = (permissions) => {
     ));
 };
 
-const EXCLUDED_EXTERNAL_ROLES = [
-    'branch_hod',
-    'college_ao',
-    'college_principal',
-    'office_assistant',
-    'cashier',
-    'faculty',
-    'head_student_clubs',
-    'pydah_coe',
-    'student'
-];
-
 /**
  * Get all roles (system and custom)
  */
@@ -61,10 +49,10 @@ exports.getRoles = async (req, res) => {
                 ) as employee_count
             FROM roles r
             LEFT JOIN users creator ON r.created_by = creator.id
-            WHERE r.role_name NOT IN (?)
+            WHERE 1 = 1
         `;
 
-        const params = [EXCLUDED_EXTERNAL_ROLES];
+        const params = [];
 
         if (!include_inactive || include_inactive === 'false') {
             query += ' AND r.is_active = 1';
@@ -144,70 +132,51 @@ exports.getRole = async (req, res) => {
  */
 exports.createRole = async (req, res) => {
     try {
-        const { role_name, display_name, description, permissions } = req.body;
-        const currentUser = req.user;
-
-        // Validation
-        if (!role_name || !display_name || !permissions) {
+        const roleName = typeof req.body.role_name === 'string'
+            ? req.body.role_name.trim().toLowerCase()
+            : '';
+        const displayName = typeof req.body.display_name === 'string'
+            ? req.body.display_name.trim()
+            : '';
+        const description = typeof req.body.description === 'string'
+            ? req.body.description.trim()
+            : '';
+        const reservedRoles = new Set(['worker', 'manager', 'sub_admin', 'super_admin']);
+        if (!/^[a-z][a-z0-9_]{0,49}$/.test(roleName) || reservedRoles.has(roleName)) {
             return res.status(400).json({
                 success: false,
-                message: 'Missing required fields: role_name, display_name, permissions'
+                message: 'Use a unique lowercase role key (letters, numbers, and underscores); standard role keys are reserved'
             });
         }
-
-        // Validate role_name format (lowercase, underscores only)
-        if (!/^[a-z_]+$/.test(role_name)) {
-            return res.status(400).json({
-                success: false,
-                message: 'Role name must be lowercase with underscores only (e.g., principal, ticket_manager)'
-            });
+        if (!displayName || displayName.length > 150) {
+            return res.status(400).json({ success: false, message: 'Enter a role name of up to 150 characters' });
+        }
+        if (description.length > 65535) {
+            return res.status(400).json({ success: false, message: 'Role description is too long' });
+        }
+        if (!req.body.permissions || typeof req.body.permissions !== 'object' || Array.isArray(req.body.permissions)) {
+            return res.status(400).json({ success: false, message: 'Configure permissions for this role' });
         }
 
-        // Check for duplicate role_name
-        const [existing] = await masterPool.query(
-            'SELECT id FROM roles WHERE role_name = ?',
-            [role_name]
-        );
-
-        if (existing.length > 0) {
-            return res.status(409).json({
-                success: false,
-                message: 'Role name already exists'
-            });
-        }
-
-        const normalizedPermissions = normalizeRolePermissions(permissions);
-
-        // Insert role
         const [result] = await masterPool.query(
             `INSERT INTO roles
-            (role_name, display_name, description, permissions, is_system_role, created_by, created_at, updated_at)
-            VALUES (?, ?, ?, ?, FALSE, ?, NOW(), NOW())`,
+                (role_name, display_name, description, permissions, is_system_role, is_active, created_by)
+             VALUES (?, ?, ?, ?, 0, 1, ?)`,
             [
-                role_name,
-                display_name,
+                roleName,
+                displayName,
                 description || null,
-                JSON.stringify(normalizedPermissions),
-                currentUser.id
+                JSON.stringify(normalizeRolePermissions(req.body.permissions)),
+                req.user?.id || null
             ]
         );
-
-        res.status(201).json({
-            success: true,
-            message: 'Role created successfully',
-            data: {
-                id: result.insertId,
-                role_name,
-                display_name,
-                permissions: normalizedPermissions
-            }
-        });
+        res.status(201).json({ success: true, message: 'Role created successfully', data: { id: result.insertId } });
     } catch (error) {
+        if (error.code === 'ER_DUP_ENTRY') {
+            return res.status(409).json({ success: false, message: 'Role key already exists' });
+        }
         console.error('Create Role Error:', error);
-        res.status(500).json({
-            success: false,
-            message: error.message || 'Server error creating role'
-        });
+        res.status(500).json({ success: false, message: 'Server error creating role' });
     }
 };
 
@@ -221,7 +190,7 @@ exports.updateRole = async (req, res) => {
 
         // Check if role exists
         const [existing] = await masterPool.query(
-            'SELECT is_system_role FROM roles WHERE id = ?',
+            'SELECT role_name, is_system_role FROM roles WHERE id = ?',
             [id]
         );
 
@@ -231,6 +200,12 @@ exports.updateRole = async (req, res) => {
                 message: 'Role not found'
             });
         }
+        if (role_name !== undefined && role_name !== existing[0].role_name) {
+            return res.status(400).json({ success: false, message: 'Role keys cannot be changed after creation' });
+        }
+        if (existing[0].is_system_role && is_active !== undefined && ![true, 1, '1'].includes(is_active)) {
+            return res.status(400).json({ success: false, message: 'Standard roles cannot be deactivated' });
+        }
 
         // Allow editing all roles (including system roles)
         // Build update query dynamically
@@ -239,7 +214,7 @@ exports.updateRole = async (req, res) => {
 
         if (role_name !== undefined) {
             // Validate role_name format
-            if (!/^[a-z_]+$/.test(role_name)) {
+            if (!/^[a-z][a-z0-9_]{0,49}$/.test(role_name)) {
                 return res.status(400).json({
                     success: false,
                     message: 'Role name must be lowercase with underscores only'
@@ -279,6 +254,15 @@ exports.updateRole = async (req, res) => {
         }
 
         if (is_active !== undefined) {
+            if (!existing[0].is_system_role && ![true, 1, '1'].includes(is_active)) {
+                const [assignedUsers] = await masterPool.query(
+                    'SELECT COUNT(*) AS count FROM users WHERE role_id = ? AND is_ticket_employee = 1 AND is_active = 1',
+                    [id]
+                );
+                if (Number(assignedUsers[0].count) > 0) {
+                    return res.status(409).json({ success: false, message: 'Reassign users before deactivating this role' });
+                }
+            }
             updates.push('is_active = ?');
             values.push(is_active ? 1 : 0);
         }
@@ -314,63 +298,8 @@ exports.updateRole = async (req, res) => {
 /**
  * Delete role (prevent deletion of super_admin role, allow deleting all other roles)
  */
-exports.deleteRole = async (req, res) => {
-    try {
-        const { id } = req.params;
-
-        // Check if role exists
-        const [existing] = await masterPool.query(
-            'SELECT is_system_role, role_name, display_name FROM roles WHERE id = ?',
-            [id]
-        );
-
-        if (existing.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: 'Role not found'
-            });
-        }
-
-        const role = existing[0];
-
-        // Superadmin cannot be deleted under any circumstances
-        if (role.role_name === 'super_admin') {
-            return res.status(403).json({
-                success: false,
-                message: 'The Super Administrator role is protected and cannot be deleted.'
-            });
-        }
-
-        // Check if role is assigned to any active employees
-        const [employees] = await masterPool.query(
-            'SELECT COUNT(*) as count FROM users WHERE role_id = ? AND is_ticket_employee = 1 AND is_active = 1',
-            [id]
-        );
-
-        if (employees[0].count > 0) {
-            return res.status(409).json({
-                success: false,
-                message: `Cannot delete role "${role.display_name}". ${employees[0].count} active employee(s) are currently assigned to this role.`
-            });
-        }
-
-        // Soft delete
-        await masterPool.query(
-            'UPDATE roles SET is_active = 0, updated_at = NOW() WHERE id = ?',
-            [id]
-        );
-
-        res.json({
-            success: true,
-            message: `Role "${role.display_name}" deleted successfully`
-        });
-    } catch (error) {
-        console.error('Delete Role Error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Server error deleting role'
-        });
-    }
+exports.deleteRole = (_req, res) => {
+    return res.status(403).json({ success: false, message: 'Maintenance roles cannot be deleted' });
 };
 
 /**
