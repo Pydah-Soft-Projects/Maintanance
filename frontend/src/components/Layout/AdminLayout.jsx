@@ -7,8 +7,8 @@ import {
     Users,
     LogOut,
     Menu,
-    PanelLeftClose,
-    PanelLeftOpen
+    ChevronLeft,
+    ChevronRight
 } from 'lucide-react';
 import useAuthStore from '../../store/authStore';
 import toast from 'react-hot-toast';
@@ -17,6 +17,7 @@ import '../../styles/admin-pages.css';
 const AdminLayout = () => {
     // State
     const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(() => window.innerWidth > 1024);
+    const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const navigate = useNavigate();
     const { user, logout, hasPermission } = useAuthStore();
 
@@ -31,6 +32,7 @@ const AdminLayout = () => {
     const allNavItems = [
         {
             id: 'dashboard',
+            group: 'MAIN',
             icon: LayoutDashboard,
             label: 'Dashboard',
             path: '/dashboard',
@@ -38,6 +40,7 @@ const AdminLayout = () => {
         },
         {
             id: 'task-management',
+            group: 'OPERATIONS',
             icon: ClipboardList,
             label: 'Complaints',
             path: '/task-management',
@@ -45,6 +48,7 @@ const AdminLayout = () => {
         },
         {
             id: 'configuration',
+            group: 'ADMINISTRATION',
             icon: Settings,
             label: 'Configuration',
             path: '/configuration',
@@ -52,6 +56,7 @@ const AdminLayout = () => {
         },
         {
             id: 'user-management',
+            group: 'ADMINISTRATION',
             icon: Users,
             label: 'User Management',
             path: '/user-management',
@@ -77,69 +82,59 @@ const AdminLayout = () => {
         container: {
             display: 'flex',
             height: '100vh',
-            backgroundColor: 'var(--background, #FAFAF5)',
+            backgroundColor: 'var(--background)',
             overflow: 'hidden',
         },
         sidebar: {
-            width: '270px',
-            backgroundColor: 'var(--sidebar, #F3F1EB)',
-            color: 'var(--sidebar-text, #333333)',
-            borderRight: '1px solid var(--border, #E5E7EB)',
+            width: sidebarCollapsed ? '80px' : '256px',
+            backgroundColor: 'var(--sidebar)',
+            color: 'var(--sidebar-text)',
+            borderRight: '1px solid var(--border)',
             height: '100%',
             position: 'fixed',
             left: 0,
             top: 0,
             zIndex: 40,
-            transition: 'transform 0.25s ease',
-            transform: desktopSidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
+            transition: 'width 0.25s ease, transform 0.25s ease',
             display: 'flex',
             flexDirection: 'column',
+            fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
         },
         logoArea: {
-            height: '70px',
+            minHeight: sidebarCollapsed ? '90px' : '106px',
             display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '0 20px',
-            borderBottom: '1px solid var(--border, #E5E7EB)',
-        },
-        logoBox: {
-            width: '36px',
-            height: '36px',
-            borderRadius: '11px',
-            background: 'var(--primary-light, #E8EEE4)',
-            display: 'flex',
+            flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            color: 'var(--primary, #1A2517)',
-            fontWeight: 'bold',
-            fontSize: '16px',
+            padding: sidebarCollapsed ? '18px 8px 12px' : '24px 12px 16px',
+            borderBottom: '1px solid var(--border)',
+            textAlign: 'center',
         },
         logoText: {
-            fontSize: '15px',
+            fontSize: '11px',
             fontWeight: '700',
-            color: 'var(--sidebar-text, #333333)',
-            marginLeft: '0',
-            fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
-            letterSpacing: '-0.02em',
-            lineHeight: '1.15',
+            color: 'var(--sidebar-muted)',
+            marginTop: '8px',
+            fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+            letterSpacing: '0.01em',
         },
         nav: {
-            padding: '20px 12px',
+            padding: '16px 14px',
             overflowY: 'auto',
             flex: 1,
         },
         navItem: (isActive) => ({
             display: 'flex',
             alignItems: 'center',
-            gap: '11px',
-            padding: '11px 12px',
-            marginBottom: '3px',
-            borderRadius: '10px',
+            justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
+            gap: '12px',
+            padding: sidebarCollapsed ? '11px 0' : '11px 14px',
+            marginBottom: '4px',
+            borderRadius: '12px',
             fontSize: '13px',
             fontWeight: isActive ? '600' : '500',
-            color: isActive ? 'var(--primary, #1A2517)' : 'var(--sidebar-text, #333333)',
-            backgroundColor: isActive ? 'var(--primary-light, #E8EEE4)' : 'transparent',
+            color: 'var(--sidebar-text)',
+            backgroundColor: isActive ? 'var(--primary)' : 'transparent',
             textDecoration: 'none',
             transition: 'all 0.15s ease',
             position: 'relative',
@@ -149,51 +144,38 @@ const AdminLayout = () => {
             height: '100vh',
             overflowY: 'auto',
             padding: '28px 36px',
-            paddingLeft: desktopSidebarOpen ? '36px' : '76px',
+            paddingLeft: '36px',
             paddingBottom: '100px',
-            marginLeft: desktopSidebarOpen ? '270px' : '0',
-            transition: 'margin-left 0.25s ease',
-            width: desktopSidebarOpen ? 'calc(100% - 270px)' : '100%',
-            maxWidth: desktopSidebarOpen ? 'calc(100% - 270px)' : '100%',
+            marginLeft: sidebarCollapsed ? '80px' : '256px',
+            transition: 'margin-left 0.25s ease, width 0.25s ease',
+            width: sidebarCollapsed ? 'calc(100% - 80px)' : 'calc(100% - 256px)',
+            maxWidth: sidebarCollapsed ? 'calc(100% - 80px)' : 'calc(100% - 256px)',
             boxSizing: 'border-box',
             minWidth: 0,
         },
-        toggleButton: {
-            position: 'fixed', top: '16px', left: '16px', zIndex: 50,
-            padding: '9px', borderRadius: '10px', backgroundColor: 'var(--surface, #FFFFFF)',
-            border: '1px solid var(--border, #E5E7EB)', cursor: 'pointer', color: 'var(--text-primary, #333333)',
-            boxShadow: '0 2px 6px rgba(15, 23, 42, 0.06)'
-        },
         profileCard: {
-            margin: '0 14px 10px 14px',
-            padding: '11px 12px',
-            borderRadius: '12px',
-            background: 'var(--background, #FAFAF5)',
-            border: '1px solid var(--border, #E5E7EB)',
+            margin: sidebarCollapsed ? '0 8px 12px' : '0 14px 12px',
+            padding: sidebarCollapsed ? '6px 4px' : '10px',
+            borderRadius: '16px',
+            background: 'color-mix(in srgb, var(--sidebar) 72%, var(--text-primary))',
+            border: '1px solid color-mix(in srgb, var(--sidebar-text) 18%, transparent)',
             display: 'flex',
             alignItems: 'center',
-            gap: '10px',
-        },
-        logoutButton: {
-            width: '100%', padding: '9px 12px', borderRadius: '10px',
-            backgroundColor: 'var(--surface, #FFFFFF)', color: 'var(--text-primary, #333333)',
-            border: '1px solid var(--border, #E5E7EB)', cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-            fontSize: '12px', fontWeight: '600',
-            transition: 'all 0.15s ease'
+            justifyContent: 'space-between',
+            gap: sidebarCollapsed ? '4px' : '8px',
         },
         mobileHeader: {
             display: 'none',
             height: '64px',
-            background: 'var(--navbar, #FFFFFF)',
+            background: 'var(--navbar)',
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: '0 16px',
             position: 'fixed',
             top: 0, left: 0, right: 0,
             zIndex: 45,
-            color: 'var(--text-primary, #333333)',
-            borderBottom: '1px solid var(--border, #E5E7EB)',
+            color: 'var(--text-primary)',
+            borderBottom: '1px solid var(--border)',
             boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)'
         },
         mobileBottomBar: {
@@ -235,7 +217,13 @@ const AdminLayout = () => {
             {/* Inject CSS for Media Queries */}
             <style>{`
                 @media (max-width: 1024px) {
-                    .desktop-sidebar { width: 270px; z-index: 60 !important; }
+                    .desktop-sidebar {
+                        width: 256px !important;
+                        z-index: 60 !important;
+                        transform: translateX(-100%);
+                    }
+                    .desktop-sidebar.mobile-open { transform: translateX(0); }
+                    .sidebar-collapse-toggle { display: none !important; }
                     .main-content {
                         margin-left: 0 !important;
                         width: 100% !important;
@@ -248,24 +236,29 @@ const AdminLayout = () => {
                     .mobile-bottom-bar { display: flex !important; }
                 }
                 @media (min-width: 1025px) {
-                    .desktop-sidebar { display: flex !important; }
+                    .desktop-sidebar { display: flex !important; transform: translateX(0) !important; }
+                    .sidebar-collapse-toggle {
+                        position: absolute;
+                        right: -12px;
+                        top: 106px;
+                        z-index: 50;
+                        display: flex;
+                        width: 24px;
+                        height: 24px;
+                        align-items: center;
+                        justify-content: center;
+                        padding: 0;
+                        border: 1px solid var(--border);
+                        border-radius: 9999px;
+                        background: var(--surface);
+                        color: var(--sidebar-muted);
+                        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.16);
+                        cursor: pointer;
+                    }
                     .mobile-header { display: none !important; }
                     .mobile-bottom-bar { display: none !important; }
                 }
             `}</style>
-
-            {!desktopSidebarOpen && (
-                <button
-                    type="button"
-                    className="hidden lg:flex"
-                    style={{ ...styles.toggleButton, left: '16px', top: '16px' }}
-                    onClick={() => setDesktopSidebarOpen(true)}
-                    aria-label="Open sidebar"
-                    title="Open sidebar"
-                >
-                    <PanelLeftOpen size={20} />
-                </button>
-            )}
 
             {/* Mobile Sidebar Backdrop */}
             {desktopSidebarOpen && (
@@ -280,102 +273,120 @@ const AdminLayout = () => {
             <header style={styles.mobileHeader} className="mobile-header">
                 <button
                     type="button"
-                    onClick={() => setDesktopSidebarOpen(true)}
-                    aria-label="Open admin navigation"
-                    className="p-2 -ml-2 text-slate-600  rounded-lg transition-colors"
+                    onClick={() => setDesktopSidebarOpen((open) => !open)}
+                    aria-label={desktopSidebarOpen ? 'Close admin navigation' : 'Open admin navigation'}
+                    className="p-2 -ml-2 rounded-lg transition-colors"
+                    style={{ color: 'var(--text-primary)' }}
                 >
                     <Menu size={24} />
                 </button>
 
                 <div className="flex items-center gap-2.5">
-                    <img
-                        src="/campo-logos/icon-192.png"
-                        alt="Campo"
-                        className="w-8 h-8 rounded-lg object-contain"
-                    />
-                    <span className="font-semibold text-base tracking-tight text-slate-900">Campo</span>
+                    <span className="font-semibold text-base tracking-tight" style={{ color: 'var(--text-primary)' }}>Campo</span>
                 </div>
-
-                <div
-                    className="w-9 h-9 rounded-full bg-blue-50 flex items-center justify-center overflow-hidden border border-blue-100"
-                >
-                    <span className="text-sm font-bold text-blue-700">{user?.username?.charAt(0).toUpperCase() || 'A'}</span>
-                </div>
+                <span className="w-9" />
             </header>
 
             {/* Sidebar */}
-            <aside style={styles.sidebar} className="desktop-sidebar">
+            <aside
+                style={styles.sidebar}
+                className={`desktop-sidebar ${desktopSidebarOpen ? 'mobile-open' : ''}`}
+            >
                 <div style={styles.logoArea}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                         <img
-                            src="/campo-logos/icon-192.png"
+                            src={sidebarCollapsed ? '/campo-logos/icon-192.png' : '/campo-logos/campo_logo_transparent_hq.png'}
                             alt="Campo"
                             style={{
-                                width: '38px',
-                                height: '38px',
-                                borderRadius: '10px',
+                                height: sidebarCollapsed ? '32px' : '28px',
+                                maxWidth: sidebarCollapsed ? '40px' : '120px',
                                 objectFit: 'contain',
                                 flexShrink: 0,
                             }}
                         />
-                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                            <span style={styles.logoText}>Campo</span>
-                            <span style={{ fontSize: '10px', fontWeight: '600', color: 'var(--sidebar-muted, #777777)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                                Support Admin
-                            </span>
-                        </div>
+                        {!sidebarCollapsed && <span style={styles.logoText}>Support &amp; Maintenance</span>}
                     </div>
-                    {/* Hide sidebar button (Desktop only) */}
                     <button
                         type="button"
-                        onClick={() => setDesktopSidebarOpen(false)}
-                        aria-label="Close admin navigation"
-                        className="rounded-lg p-2 transition-colors"
-                        style={{ color: 'var(--sidebar-muted, #AABBD4)' }}
+                        onClick={() => {
+                            if (window.innerWidth <= 1024) {
+                                setDesktopSidebarOpen(false);
+                            } else {
+                                setSidebarCollapsed((collapsed) => !collapsed);
+                            }
+                        }}
+                        aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                        title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                        className="sidebar-collapse-toggle"
                     >
-                        <PanelLeftClose size={20} />
+                        {sidebarCollapsed ? <ChevronRight size={14} strokeWidth={2.5} /> : <ChevronLeft size={14} strokeWidth={2.5} />}
                     </button>
                 </div>
 
                 <nav style={styles.nav} className="custom-scrollbar">
-                    {navItems.map((item, index) => {
-                        const Icon = item.icon;
+                    {['MAIN', 'OPERATIONS', 'ADMINISTRATION'].map((group) => {
+                        const groupItems = navItems.filter((item) => item.group === group);
+                        if (!groupItems.length) return null;
                         return (
-                            <NavLink
-                                key={index}
-                                to={item.path}
-                                style={({ isActive }) => styles.navItem(isActive)}
-                            >
-                                {({ isActive }) => (
-                                    <>
-                                        <Icon size={20} />
-                                        <span>{item.label}</span>
-                                        {isActive && <div style={{ marginLeft: 'auto', width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'var(--primary, #1A2517)' }} />}
-                                    </>
+                            <div key={group} style={{ marginBottom: '18px' }}>
+                                {!sidebarCollapsed && (
+                                    <div style={{ padding: '0 10px 8px', color: 'var(--sidebar-muted)', fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em' }}>
+                                        {group}
+                                    </div>
                                 )}
-                            </NavLink>
+                                {groupItems.map((item) => {
+                                    const Icon = item.icon;
+                                    return (
+                                        <NavLink
+                                            key={item.id}
+                                            to={item.path}
+                                            title={sidebarCollapsed ? item.label : undefined}
+                                            style={({ isActive }) => styles.navItem(isActive)}
+                                        >
+                                            <Icon size={18} />
+                                            {!sidebarCollapsed && <span>{item.label}</span>}
+                                        </NavLink>
+                                    );
+                                })}
+                            </div>
                         );
                     })}
                 </nav>
 
                 {/* User Info */}
                 <div style={styles.profileCard}>
-                    <div style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: 'var(--primary-light, #E8EEE4)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary, #1A2517)', fontSize: '14px', fontWeight: 'bold' }}>
-                        {user?.username?.charAt(0).toUpperCase()}
+                    <div style={{ width: sidebarCollapsed ? '28px' : '36px', height: sidebarCollapsed ? '28px' : '36px', flexShrink: 0, borderRadius: '50%', backgroundColor: 'var(--primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', fontSize: '14px', fontWeight: 'bold' }}>
+                        {(user?.name || user?.username || 'A').charAt(0).toUpperCase()}
                     </div>
-                    <div style={{ flex: 1, overflow: 'hidden' }}>
-                        <p style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary, #333333)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', margin: 0 }}>
+                    {!sidebarCollapsed && <div style={{ flex: 1, overflow: 'hidden' }}>
+                        <p style={{ fontSize: '12px', fontWeight: '700', color: 'var(--sidebar-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textTransform: 'uppercase', margin: 0 }}>
                             {user?.name || user?.username || 'Admin'}
                         </p>
-                        <p style={{ fontSize: '11px', color: 'var(--text-secondary, #555555)', margin: 0 }}>
-                            {user?.role}
+                        <p style={{ fontSize: '10px', color: 'var(--sidebar-muted)', margin: 0 }}>
+                            {user?.role === 'super_admin' ? 'Superadmin' : user?.role?.replace(/_/g, ' ')}
                         </p>
-                    </div>
-                </div>
-
-                <div style={{ padding: '16px', borderTop: '1px solid var(--border, #E5E7EB)', backgroundColor: 'color-mix(in srgb, var(--background, #FAFAF5) 50%, transparent)' }}>
-                    <button onClick={handleLogout} style={styles.logoutButton}>
-                        <LogOut size={16} /> Sign Out
+                    </div>}
+                    <button
+                        type="button"
+                        onClick={handleLogout}
+                        aria-label="Sign out"
+                        title="Sign Out"
+                        style={{
+                            display: 'flex',
+                            width: sidebarCollapsed ? '20px' : '30px',
+                            height: sidebarCollapsed ? '28px' : '30px',
+                            flexShrink: 0,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: 0,
+                            border: 0,
+                            borderRadius: '8px',
+                            background: 'transparent',
+                            color: 'var(--sidebar-text)',
+                            cursor: 'pointer'
+                        }}
+                    >
+                        <LogOut size={16} />
                     </button>
                 </div>
             </aside>
