@@ -1,6 +1,5 @@
 import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Wrench } from 'lucide-react';
 import useAuthStore from '../../store/authStore';
 
 const TopHeaderBar = () => {
@@ -32,9 +31,13 @@ const TopHeaderBar = () => {
                     type="button"
                     onClick={() => navigate('/student/dashboard')}
                     aria-label="Go to student dashboard"
-                    className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-600 text-white shadow-sm transition-colors "
+                    className="flex h-9 w-9 items-center justify-center rounded-xl overflow-hidden shadow-xs transition-transform active:scale-95"
                 >
-                    <Wrench size={18} />
+                    <img
+                        src="/campo-logos/icon-192.png"
+                        alt="Campo"
+                        className="h-full w-full object-contain"
+                    />
                 </button>
                 <div className="flex items-center border-l border-slate-300/80 pl-3 h-6 sm:h-7 min-w-0">
                     <span className="text-xs sm:text-sm font-bold text-slate-800 tracking-tight flex items-center gap-1.5 truncate leading-none">

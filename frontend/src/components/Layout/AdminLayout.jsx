@@ -116,12 +116,13 @@ const AdminLayout = () => {
             fontSize: '16px',
         },
         logoText: {
-            fontSize: '14px',
+            fontSize: '15px',
             fontWeight: '700',
-            color: 'var(--sidebar-text, #F5F8FC)',
-            marginLeft: '12px',
+            color: 'var(--sidebar-text, #333333)',
+            marginLeft: '0',
             fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
             letterSpacing: '-0.02em',
+            lineHeight: '1.15',
         },
         nav: {
             padding: '20px 12px',
@@ -286,11 +287,13 @@ const AdminLayout = () => {
                     <Menu size={24} />
                 </button>
 
-                <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
-                        <span className="font-bold text-blue-700">A</span>
-                    </div>
-                    <span className="font-semibold text-base tracking-tight text-slate-900">Admin Portal</span>
+                <div className="flex items-center gap-2.5">
+                    <img
+                        src="/campo-logos/icon-192.png"
+                        alt="Campo"
+                        className="w-8 h-8 rounded-lg object-contain"
+                    />
+                    <span className="font-semibold text-base tracking-tight text-slate-900">Campo</span>
                 </div>
 
                 <div
@@ -303,9 +306,24 @@ const AdminLayout = () => {
             {/* Sidebar */}
             <aside style={styles.sidebar} className="desktop-sidebar">
                 <div style={styles.logoArea}>
-                    <div style={{ display: 'flex', alignItems: 'center' }}>
-                        <div style={styles.logoBox}>T</div>
-                        <span style={styles.logoText}>Support Admin</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <img
+                            src="/campo-logos/icon-192.png"
+                            alt="Campo"
+                            style={{
+                                width: '38px',
+                                height: '38px',
+                                borderRadius: '10px',
+                                objectFit: 'contain',
+                                flexShrink: 0,
+                            }}
+                        />
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <span style={styles.logoText}>Campo</span>
+                            <span style={{ fontSize: '10px', fontWeight: '600', color: 'var(--sidebar-muted, #777777)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                                Support Admin
+                            </span>
+                        </div>
                     </div>
                     {/* Hide sidebar button (Desktop only) */}
                     <button

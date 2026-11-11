@@ -83,14 +83,16 @@ const StudentLayout = () => {
                             className="flex items-center gap-3 cursor-pointer group"
                             onClick={() => navigate('/student/dashboard')}
                         >
-                            <div className="h-10 w-10 rounded-2xl bg-gradient-to-br from-sky-500 to-indigo-600 shadow-md shadow-sky-200 flex items-center justify-center text-white font-bold text-lg tracking-tight transition-transform duration-200 ">
-                                T
-                            </div>
+                            <img
+                                src="/campo-logos/icon-192.png"
+                                alt="Campo"
+                                className="h-10 w-10 rounded-xl object-contain shadow-xs transition-transform duration-200"
+                            />
                             <div className="flex flex-col">
-                                <span className="text-[15px] font-bold text-slate-900 tracking-tight leading-tight">
-                                    Ticket Support
+                                <span className="text-[15px] font-bold tracking-tight leading-tight" style={{ color: 'var(--sidebar-text, #333333)' }}>
+                                    Campo
                                 </span>
-                                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                                <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--sidebar-muted, #777777)' }}>
                                     Support Portal
                                 </span>
                             </div>

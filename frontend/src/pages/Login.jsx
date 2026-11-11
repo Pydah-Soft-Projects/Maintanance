@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { LogIn, Loader2, Eye, EyeOff, Users, Wrench, ClipboardCheck, CircleCheck } from 'lucide-react';
+import { LogIn, Loader2, Eye, EyeOff, Users, ClipboardCheck, CircleCheck } from 'lucide-react';
 import { motion as Motion } from 'framer-motion';
 import useAuthStore from '../store/authStore';
 import toast from 'react-hot-toast';
@@ -69,8 +69,12 @@ const Login = ({ isStudent = false }) => {
             <div aria-hidden="true" className="login-orb login-orb-two" />
 
             <section className="login-hero relative z-10 mx-auto hidden w-full max-w-xl lg:block">
-                <div className="mb-8 flex h-14 w-14 items-center justify-center rounded-2xl border border-white/15 bg-white/10 text-primary-light shadow-lg backdrop-blur">
-                    <Wrench size={26} strokeWidth={1.8} />
+                <div className="mb-8">
+                    <img
+                        src="/campo-logos/campo_logo_transparent_hq.png"
+                        alt="Campo"
+                        className="h-11 w-auto object-contain"
+                    />
                 </div>
                 <p className="mb-4 text-xs font-semibold uppercase tracking-[0.24em] text-primary-light">
                     {isStudentLogin ? 'Student services' : 'Support & maintenance'}
@@ -113,9 +117,11 @@ const Login = ({ isStudent = false }) => {
                 className="login-card relative z-10 mx-auto w-full max-w-md rounded-3xl p-6 shadow-2xl sm:p-10 lg:justify-self-end"
             >
                 <header className="mb-8 text-center">
-                    <div aria-hidden="true" className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-light shadow-lg shadow-primary/20">
-                        <Wrench size={25} strokeWidth={1.8} />
-                    </div>
+                    <img
+                        src="/campo-logos/icon-192.png"
+                        alt="Campo"
+                        className="mx-auto mb-5 h-14 w-14 rounded-2xl object-contain shadow-md"
+                    />
                     <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-text-secondary">
                         {isStudentLogin ? 'Student ' : ''}Support Portal
                     </p>
@@ -207,7 +213,7 @@ const Login = ({ isStudent = false }) => {
                 </div>
 
                 <footer className="mt-8 border-t border-gray-100 pt-5 text-center text-xs text-gray-400">
-                    © {new Date().getFullYear()} Support &amp; Ticket Management System
+                    © {new Date().getFullYear()} Campo — Support &amp; Maintenance Portal
                 </footer>
             </Motion.div>
         </main>
