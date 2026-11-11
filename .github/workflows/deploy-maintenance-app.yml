@@ -67,19 +67,18 @@ jobs:
       - name: Upload dist archive to server
         uses: appleboy/scp-action@v1.0.0
         with:
-          host: ${{ secrets.LIGHTSAIL_MAINTENANCE_HOST || secrets.LIGHTSAIL_HOST || secrets.SERVER_IP || secrets.HOST }}
+          host: ${{ secrets.SERVER_IP }}
           username: ec2-user
-          key: ${{ secrets.LIGHTSAIL_SSH_KEY || secrets.SSH_PRIVATE_KEY || secrets.SSH_KEY }}
+          key: ${{ secrets.SSH_KEY }}
           source: maintenance-dist.tar.gz
           target: /tmp/
 
       - name: Deploy backend + frontend on server
         uses: appleboy/ssh-action@v1.2.5
         with:
-          host: ${{ secrets.LIGHTSAIL_MAINTENANCE_HOST || secrets.LIGHTSAIL_HOST || secrets.SERVER_IP || secrets.HOST }}
+          host: ${{ secrets.SERVER_IP }}
           username: ec2-user
-          key: ${{ secrets.LIGHTSAIL_SSH_KEY || secrets.SSH_PRIVATE_KEY || secrets.SSH_KEY }}
-          script_stop: true
+          key: ${{ secrets.SSH_KEY }}
           command_timeout: 15m
           script: |
             set -euo pipefail
@@ -135,11 +134,6 @@ jobs:
             fi
             pm2 save
 
-            if [ -f "$APP/nginx/maintenance.conf" ]; then
-              echo "==> Updating Nginx config from nginx/maintenance.conf"
-              sudo cp "$APP/nginx/maintenance.conf" /etc/nginx/conf.d/maintenance.conf
-            fi
-
             echo "==> Nginx test and reload"
             sudo nginx -t
             sudo systemctl reload nginx
@@ -174,9 +168,9 @@ jobs:
       - name: Verify deployment
         uses: appleboy/ssh-action@v1.2.5
         with:
-          host: ${{ secrets.LIGHTSAIL_MAINTENANCE_HOST || secrets.LIGHTSAIL_HOST || secrets.SERVER_IP || secrets.HOST }}
+          host: ${{ secrets.SERVER_IP }}
           username: ec2-user
-          key: ${{ secrets.LIGHTSAIL_SSH_KEY || secrets.SSH_PRIVATE_KEY || secrets.SSH_KEY }}
+          key: ${{ secrets.SSH_KEY }}
           script: |
             set -e
             PM2_APP="${{ env.PM2_APP_NAME }}"
