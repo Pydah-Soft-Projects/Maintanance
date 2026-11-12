@@ -296,7 +296,10 @@ exports.createTicket = async (req, res) => {
                     : 'Faculty complaints must use the HRMS reference site'
             });
         }
-        const referenceSite = requestedReferenceSite || (isStudent ? 'SDMS' : 'HRMS');
+        const isHostelPortal = /^https?:\/\/hostel\.pydah\.edu\.in(?::\d+)?$/i.test(req.get('origin') || '');
+        const referenceSite = isStudent && isHostelPortal
+            ? 'HMS'
+            : requestedReferenceSite || (isStudent ? 'SDMS' : 'HRMS');
         const requesterIdentifier = isStudent
             ? admissionNumber
             : (user.username || user.email || (user.hrmsId ? `HRMS-${user.hrmsId}` : `STAFF-${userId || Date.now()}`));
@@ -442,7 +445,7 @@ exports.getTickets = async (req, res) => {
         }
         if (status) { conditions.push('c.status = ?'); params.push(status); }
         if (category_id) { conditions.push('c.category_id = ?'); params.push(category_id); }
-        if (reference_site) {
+        if (reference_site && reference_site !== 'ALL') {
             const normalizedReferenceSite = String(reference_site).trim().toUpperCase();
             if (!['SDMS', 'HMS', 'HRMS'].includes(normalizedReferenceSite)) {
                 return res.status(400).json({ success: false, message: 'Reference site must be SDMS, HMS, or HRMS' });
@@ -464,7 +467,7 @@ exports.getTickets = async (req, res) => {
         const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
         const from = `FROM complaints c ${joins.join(' ')}`;
         const pageNumber = Math.max(1, Number.parseInt(page, 10) || 1);
-        const pageSize = Math.min(200, Math.max(1, Number.parseInt(limit, 10) || 50));
+        const pageSize = Math.min(1000, Math.max(1, Number.parseInt(limit, 10) || 50));
         const offset = (pageNumber - 1) * pageSize;
         const [rows] = await masterPool.query(
             `SELECT DISTINCT c.*, cat.name AS category_name, sub.name AS sub_category_name
@@ -688,6 +691,12 @@ exports.changeTicketStatus = async (req, res) => {
         if (row.status === 'rejected') {
             return res.status(409).json({ success: false, message: 'Rejected complaints are terminal and cannot be reopened' });
         }
+        if (row.status === 'closed') {
+            return res.status(403).json({
+                success: false,
+                message: 'This complaint is closed. Status cannot be modified by maintenance users. It can only change when the requester submits unsatisfactory feedback.'
+            });
+        }
         const user = req.user || req.admin || req.student;
         if (user?.role === 'worker' && !hasActiveAssignment(row, user.id)) {
             return res.status(403).json({ success: false, message: 'Workers may only update complaints assigned to them' });
@@ -785,7 +794,9 @@ exports.submitFeedback = async (req, res) => {
         const row = await getComplaintRow(req.params.id);
         const admissionNumber = user.admission_number || user.admissionNumber;
         if (!row || row.requester_identifier !== admissionNumber) return res.status(404).json({ success: false, message: 'Complaint not found or access denied' });
-        if (row.status !== 'completed') return res.status(400).json({ success: false, message: 'Feedback can only be submitted for completed complaints' });
+        if (row.status !== 'completed' && row.status !== 'closed') {
+            return res.status(400).json({ success: false, message: 'Feedback can only be submitted for completed or closed complaints' });
+        }
         const previousFeedback = parseJson(row.feedback, null);
         const previousSatisfaction = typeof previousFeedback?.satisfied === 'boolean'
             ? previousFeedback.satisfied
@@ -794,19 +805,22 @@ exports.submitFeedback = async (req, res) => {
                 : Number.isInteger(Number(previousFeedback?.rating))
                     ? Number(previousFeedback.rating) >= 4
                     : null;
-        if (previousFeedback && previousSatisfaction !== false) {
-            return res.status(400).json({ success: false, message: 'Feedback already submitted for this complaint' });
+        if (previousFeedback && previousSatisfaction === true && satisfied === true) {
+            return res.status(400).json({ success: false, message: 'Feedback already submitted as satisfied for this complaint' });
         }
         const feedback = {
             student_id: row.requester_user_id,
             satisfied,
+            comments: req.body.comments || req.body.notes || null,
             created_at: new Date().toISOString()
         };
         await saveComplaintJson(row.id, 'feedback', feedback);
         const nextStatus = satisfied ? 'closed' : 'pending';
         const statusNote = satisfied
             ? 'Complaint closed after requester confirmed the resolution'
-            : 'Reopened after requester reported the resolution was not satisfactory';
+            : (req.body.comments
+                ? `Reopened after requester reported the resolution was not satisfactory: ${req.body.comments}`
+                : 'Reopened after requester reported the resolution was not satisfactory');
         const freshRow = { ...row, feedback: JSON.stringify(feedback) };
         await appendStatus(freshRow, nextStatus, user.id, statusNote);
         res.status(201).json({

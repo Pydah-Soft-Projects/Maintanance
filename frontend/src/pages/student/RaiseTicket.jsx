@@ -29,9 +29,14 @@ const RaiseTicket = () => {
     const queryClient = useQueryClient();
     const authUser = useAuthStore((state) => state.user);
     const isStudentRequester = authUser?.role === 'student' || authUser?.admission_number || authUser?.admissionNumber;
-    const defaultReferenceSite = isStudentRequester ? 'SDMS' : 'HRMS';
+    const isHostelPortal = window.location.hostname.toLowerCase() === 'hostel.pydah.edu.in';
+    const defaultReferenceSite = isStudentRequester
+        ? (isHostelPortal ? 'HMS' : 'SDMS')
+        : 'HRMS';
     const referenceSiteOptions = isStudentRequester
-        ? [{ value: 'SDMS', label: 'SDMS · Student' }, { value: 'HMS', label: 'HMS · Hostel' }]
+        ? (isHostelPortal
+            ? [{ value: 'HMS', label: 'HMS · Hostel' }]
+            : [{ value: 'SDMS', label: 'SDMS · Student' }, { value: 'HMS', label: 'HMS · Hostel' }])
         : [{ value: 'HRMS', label: 'HRMS · Faculty' }];
 
     const [formData, setFormData] = useState({

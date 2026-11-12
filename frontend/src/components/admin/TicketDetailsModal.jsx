@@ -10,7 +10,8 @@ import {
     Clock,
     User,
     MapPin,
-    Search
+    Search,
+    Lock as LockIcon
 } from 'lucide-react';
 import TicketStepper from './TicketStepper';
 import { resolveTicketPhotoUrl } from '../../utils/ticketPhoto';
@@ -88,8 +89,9 @@ const TicketDetailsModal = ({
 
     const isApprovalPending = approvalData?.state === 'pending';
     const isRejected = ticket.status === 'rejected';
-    const isStatusLocked = isApprovalPending || isRejected;
-    const isAssignmentLocked = isApprovalPending || isRejected || !canManageAssignments;
+    const isClosed = ticket.status === 'closed';
+    const isStatusLocked = isApprovalPending || isRejected || isClosed;
+    const isAssignmentLocked = isApprovalPending || isRejected || isClosed || !canManageAssignments;
 
     const visibleAssignees = (assignTab === 'managers' ? managersList : workersList).filter((person) => {
         const query = assigneeSearch.trim().toLowerCase();
@@ -306,21 +308,30 @@ const TicketDetailsModal = ({
                                         {STATUS_LABELS[ticket.status] || ticket.status}
                                     </span>
                                 </div>
-                                <div className="ticket-inline-status">
-                                    <select
-                                        aria-label="Update complaint status"
-                                        value={statusForm.status || ticket.status}
-                                        onChange={(event) => onStatusChange({ ...statusForm, status: event.target.value })}
-                                        disabled={isStatusLocked}
-                                    >
-                                        {Object.entries(STATUS_LABELS)
-                                            .filter(([status]) => status !== 'rejected' && (status !== 'closed' || ticket.status === 'closed'))
-                                            .map(([status, label]) => <option key={status} value={status}>{label}</option>)}
-                                    </select>
-                                    <button type="button" onClick={onStatusSubmit} disabled={statusUpdating || isStatusLocked}>
-                                        {statusUpdating ? 'Updating...' : 'Update'}
-                                    </button>
-                                </div>
+                                {!isClosed ? (
+                                    <div className="ticket-inline-status">
+                                        <select
+                                            aria-label="Update complaint status"
+                                            value={statusForm.status || ticket.status}
+                                            onChange={(event) => onStatusChange({ ...statusForm, status: event.target.value })}
+                                            disabled={isStatusLocked}
+                                        >
+                                            {Object.entries(STATUS_LABELS)
+                                                .filter(([status]) => status !== 'rejected' && status !== 'closed')
+                                                .map(([status, label]) => <option key={status} value={status}>{label}</option>)}
+                                        </select>
+                                        <button type="button" onClick={onStatusSubmit} disabled={statusUpdating || isStatusLocked}>
+                                            {statusUpdating ? 'Updating...' : 'Update'}
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div style={{ marginTop: '0.75rem', padding: '0.75rem 1rem', backgroundColor: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '0.75rem', color: '#475569', fontSize: '0.8rem', lineHeight: '1.4' }}>
+                                        <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.25rem', color: '#1E293B' }}>
+                                            <LockIcon size={14} className="text-slate-500" /> Status Locked
+                                        </div>
+                                        This complaint is closed. Status cannot be modified by maintenance users. It can only reopen if the requester submits unsatisfactory feedback.
+                                    </div>
+                                )}
                                 {isApprovalPending && (
                                     <p className="ticket-inline-help">Status changes are locked until the approval flow finishes.</p>
                                 )}

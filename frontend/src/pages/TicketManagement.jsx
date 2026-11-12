@@ -674,13 +674,15 @@ const TicketDetailsModal = ({ ticket, onClose, onAssign, onStatusUpdate, onAddCo
                             <UserPlus size={18} />
                             Assign
                         </button>
-                        <button
-                            onClick={onStatusUpdate}
-                            className="px-4 py-2 bg-purple-600 text-white rounded-lg  flex items-center gap-2"
-                        >
-                            <Edit size={18} />
-                            Update Status
-                        </button>
+                        {ticket.status !== 'closed' && (
+                            <button
+                                onClick={onStatusUpdate}
+                                className="px-4 py-2 bg-purple-600 text-white rounded-lg flex items-center gap-2"
+                            >
+                                <Edit size={18} />
+                                Update Status
+                            </button>
+                        )}
                         <button
                             onClick={onAddComment}
                             className="px-4 py-2 bg-blue-600 text-white rounded-lg  flex items-center gap-2"

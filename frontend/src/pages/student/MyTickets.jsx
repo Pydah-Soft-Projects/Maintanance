@@ -437,7 +437,7 @@ const MyTickets = () => {
                                     {filteredTickets.map((t) => {
                                         const feedbackSatisfaction = getFeedbackSatisfaction(t.feedback);
                                         const isFeedbackGiven = Boolean(t.feedback);
-                                        const canSubmitFeedback = t.status === 'completed'
+                                        const canSubmitFeedback = (t.status === 'completed' || t.status === 'closed')
                                             && (!isFeedbackGiven || feedbackSatisfaction === false);
                                         const effectiveStatus = t.status;
                                         const statusInfo = STATUS_CONFIG[effectiveStatus] || STATUS_CONFIG.pending;
@@ -507,15 +507,32 @@ const MyTickets = () => {
                                                         {canSubmitFeedback && (
                                                             <button
                                                                 type="button"
-                                                                onClick={() => {
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
                                                                     setSelectedTicket(t);
                                                                     setFeedbackForm({ satisfied: true });
                                                                     setShowFeedbackModal(true);
                                                                 }}
-                                                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-white bg-emerald-600  transition-colors shadow-2xs cursor-pointer"
+                                                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors shadow-2xs cursor-pointer"
                                                             >
                                                                 <ThumbsUp size={13} />
                                                                 <span>Feedback</span>
+                                                            </button>
+                                                        )}
+                                                        {t.status === 'closed' && isFeedbackGiven && feedbackSatisfaction === true && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setSelectedTicket(t);
+                                                                    setFeedbackForm({ satisfied: false });
+                                                                    setShowFeedbackModal(true);
+                                                                }}
+                                                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 transition-colors shadow-2xs cursor-pointer"
+                                                                title="Report that the issue was not satisfactorily resolved"
+                                                            >
+                                                                <XCircle size={13} />
+                                                                <span>Not satisfied?</span>
                                                             </button>
                                                         )}
                                                         {isFeedbackGiven && (
@@ -543,7 +560,7 @@ const MyTickets = () => {
                         {filteredTickets.map((t, index) => {
                             const feedbackSatisfaction = getFeedbackSatisfaction(t.feedback);
                             const isFeedbackGiven = Boolean(t.feedback);
-                            const canSubmitFeedback = t.status === 'completed'
+                            const canSubmitFeedback = (t.status === 'completed' || t.status === 'closed')
                                 && (!isFeedbackGiven || feedbackSatisfaction === false);
                             const effectiveStatus = t.status;
                             const statusInfo = STATUS_CONFIG[effectiveStatus] || STATUS_CONFIG.pending;
@@ -663,10 +680,26 @@ const MyTickets = () => {
                                                     setFeedbackForm({ satisfied: true });
                                                     setShowFeedbackModal(true);
                                                 }}
-                                                className="inline-flex items-center gap-1 py-2 px-3 rounded-xl text-xs font-semibold text-white bg-emerald-600  transition-colors shadow-2xs cursor-pointer whitespace-nowrap"
+                                                className="inline-flex items-center gap-1 py-2 px-3 rounded-xl text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors shadow-2xs cursor-pointer whitespace-nowrap"
                                             >
                                                 <ThumbsUp size={13} />
                                                 <span>Feedback</span>
+                                            </button>
+                                        )}
+
+                                        {t.status === 'closed' && isFeedbackGiven && feedbackSatisfaction === true && (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setSelectedTicket(t);
+                                                    setFeedbackForm({ satisfied: false });
+                                                    setShowFeedbackModal(true);
+                                                }}
+                                                className="inline-flex items-center gap-1 py-2 px-3 rounded-xl text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 transition-colors shadow-2xs cursor-pointer whitespace-nowrap"
+                                                title="Report that the issue was not satisfactorily resolved"
+                                            >
+                                                <XCircle size={13} />
+                                                <span>Not satisfied?</span>
                                             </button>
                                         )}
 
@@ -789,7 +822,7 @@ const TicketStepper = ({ status }) => {
 // Ticket Details Modal
 const TicketDetailsModal = ({ ticket, onClose, onFeedback }) => {
     const feedbackSatisfaction = getFeedbackSatisfaction(ticket.feedback);
-    const canSubmitFeedback = ticket.status === 'completed'
+    const canSubmitFeedback = (ticket.status === 'completed' || ticket.status === 'closed')
         && (!ticket.feedback || feedbackSatisfaction === false);
 
     return (
@@ -1002,21 +1035,25 @@ const TicketDetailsModal = ({ ticket, onClose, onFeedback }) => {
 
                 {/* Modal Footer */}
                 <div className="px-6 py-4 border-t border-slate-200/80 bg-slate-50/50 flex flex-wrap items-center justify-between gap-3">
-                    {canSubmitFeedback && (
+                    {(canSubmitFeedback || ticket.status === 'closed') && (
                         <div className="flex items-center gap-2 w-full sm:w-auto">
-                            <span className="text-xs font-medium text-slate-600">Was the issue resolved?</span>
+                            <span className="text-xs font-medium text-slate-600">
+                                {ticket.status === 'closed' ? 'Issue recurred or not resolved?' : 'Was the issue resolved?'}
+                            </span>
                             <button
                                 onClick={() => onFeedback(false)}
-                                className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-red-200 text-red-600 bg-red-50  transition-colors"
+                                className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-red-200 text-red-600 bg-red-50 hover:bg-red-100 transition-colors"
                             >
                                 Not satisfied
                             </button>
-                            <button
-                                onClick={() => onFeedback(true)}
-                                className="px-3.5 py-1.5 text-xs font-semibold rounded-lg text-white bg-emerald-600  transition-colors"
-                            >
-                                Satisfied
-                            </button>
+                            {ticket.status !== 'closed' && (
+                                <button
+                                    onClick={() => onFeedback(true)}
+                                    className="px-3.5 py-1.5 text-xs font-semibold rounded-lg text-white bg-emerald-600 hover:bg-emerald-700 transition-colors"
+                                >
+                                    Satisfied
+                                </button>
+                            )}
                         </div>
                     )}
 

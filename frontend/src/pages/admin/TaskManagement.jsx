@@ -11,7 +11,8 @@ import {
     XCircle,
     Filter,
     GraduationCap,
-    Briefcase
+    Briefcase,
+    LayoutGrid
 } from 'lucide-react';
 import api from '../../config/api';
 import toast from 'react-hot-toast';
@@ -39,9 +40,10 @@ const STATUS_LABELS = {
 };
 
 const COMPLAINT_SOURCES = [
-    { id: 'SDMS', label: 'SDMS · Student', icon: GraduationCap, permission: 'student', requesterType: 'student' },
-    { id: 'HMS', label: 'HMS · Hostel', icon: Ticket, permission: 'student', requesterType: 'student' },
-    { id: 'HRMS', label: 'HRMS · Faculty', icon: Briefcase, permission: 'faculty', requesterType: 'staff' }
+    { id: 'ALL', label: 'All Sources', icon: LayoutGrid, permission: null, requesterType: null },
+    { id: 'SDMS', label: 'SDMS · Student', icon: GraduationCap, permission: null, requesterType: 'student' },
+    { id: 'HMS', label: 'HMS · Hostel', icon: Ticket, permission: null, requesterType: 'student' },
+    { id: 'HRMS', label: 'HRMS · Faculty', icon: Briefcase, permission: null, requesterType: 'staff' }
 ];
 
 const getRequesterLabel = (ticket) =>
@@ -60,21 +62,18 @@ const TaskManagement = () => {
         authUser?.ticketRole === 'worker' ||
         authUser?.is_worker === true;
     const canViewEmployeeDirectory = hasPermission('employee_management', 'read');
-    const [selectedReferenceSite, setReferenceSite] = useState('SDMS');
-    const [selectedTab, setActiveTab] = useState(isWorker ? 'assigned' : 'pending');
-    const allowedSources = COMPLAINT_SOURCES.filter(({ permission }) =>
-        hasPermission('ticket_management', permission)
-    );
-    const allowedTabs = ['pending', 'assigned', 'resolved']
-        .filter((tab) => hasPermission('ticket_management', tab));
-    const approvalTab = allowedTabs.includes('pending') ? 'pending' : 'assigned';
+    const [selectedReferenceSite, setReferenceSite] = useState('ALL');
+    const [selectedTab, setActiveTab] = useState(isWorker ? 'assigned' : 'all');
+    const allowedSources = COMPLAINT_SOURCES;
+    const allowedTabs = ['all', 'pending', 'assigned', 'resolved'];
+    const approvalTab = 'pending';
     const referenceSite = allowedSources.some(({ id }) => id === selectedReferenceSite)
         ? selectedReferenceSite
-        : allowedSources[0]?.id;
+        : 'ALL';
     const selectedSource = COMPLAINT_SOURCES.find(({ id }) => id === referenceSite);
     const activeTab = isWorker
         ? 'assigned'
-        : allowedTabs.includes(selectedTab) ? selectedTab : allowedTabs[0];
+        : allowedTabs.includes(selectedTab) ? selectedTab : 'all';
     const [filters, setFilters] = useState({
         category_id: '',
         assigned_to: '',
@@ -103,6 +102,7 @@ const TaskManagement = () => {
     // Map tabs to status array
     const getStatusesForTab = (tab) => {
         switch (tab) {
+            case 'all': return ['pending', 'approaching', 'resolving', 'completed', 'closed', 'rejected'];
             case 'pending': return ['pending'];
             case 'assigned': return ['approaching', 'resolving'];
             case 'resolved': return ['completed', 'closed', 'rejected'];
@@ -115,14 +115,12 @@ const TaskManagement = () => {
         queryKey: ['ticket-source-counts', allowedSources.map(({ id }) => id)],
         queryFn: async () => {
             const results = await Promise.all(allowedSources.map(async (source) => {
-                const response = await api.get('/tickets', {
-                    params: {
-                        reference_site: source.id,
-                        requester_type: source.requesterType,
-                        page: 1,
-                        limit: 1
-                    }
-                });
+                const params = { page: 1, limit: 1 };
+                if (source.id !== 'ALL') {
+                    params.reference_site = source.id;
+                    params.requester_type = source.requesterType;
+                }
+                const response = await api.get('/tickets', { params });
                 return [source.id, response.data?.pagination?.total ?? 0];
             }));
             return Object.fromEntries(results);
@@ -134,18 +132,20 @@ const TaskManagement = () => {
         queryKey: ['tickets', isWorker ? 'assigned-to-me' : referenceSite, filters],
         queryFn: async () => {
             const params = new URLSearchParams();
-            if (!isWorker) {
-                params.append('requester_type', selectedSource.requesterType);
+            if (!isWorker && referenceSite && referenceSite !== 'ALL') {
+                if (selectedSource?.requesterType) {
+                    params.append('requester_type', selectedSource.requesterType);
+                }
                 params.append('reference_site', referenceSite);
             }
             params.append('page', '1');
-            params.append('limit', '200');
+            params.append('limit', '1000');
             const response = await api.get(`/tickets?${params.toString()}`);
             return response.data;
         },
         staleTime: 0,
         refetchOnMount: 'always',
-        enabled: Boolean(activeTab && (isWorker || (referenceSite && selectedSource)))
+        enabled: Boolean(activeTab && (isWorker || referenceSite))
     });
 
     const { data: ticketDetails, isLoading: ticketDetailsLoading } = useQuery({
@@ -280,7 +280,7 @@ const TaskManagement = () => {
     const sourceTickets = allTickets;
 
     const getTabCount = (tab) => {
-        if (isWorker) return sourceTickets.length;
+        if (isWorker || tab === 'all') return sourceTickets.length;
         const statuses = getStatusesForTab(tab);
         return sourceTickets.filter((ticket) =>
             statuses.includes(ticket.status) ||
@@ -290,12 +290,16 @@ const TaskManagement = () => {
 
     const filteredTickets = sourceTickets.filter(ticket => {
         const statuses = getStatusesForTab(activeTab);
-        const matchesStatus = isWorker || statuses.includes(ticket.status) ||
+        const matchesStatus = isWorker || activeTab === 'all' || statuses.includes(ticket.status) ||
             (activeTab === approvalTab && ticket.approval?.state === 'pending' && ticket.approval.can_act);
-        const matchesCategory = filters.category_id ? ticket.category_id === parseInt(filters.category_id) : true;
+        const matchesCategory = filters.category_id
+            ? Number(ticket.category_id) === Number(filters.category_id)
+            : true;
         const matchesSearch = filters.search ?
             ticket.title.toLowerCase().includes(filters.search.toLowerCase()) ||
-            ticket.ticket_number.toLowerCase().includes(filters.search.toLowerCase()) ||
+            (ticket.complaint_number && String(ticket.complaint_number).toLowerCase().includes(filters.search.toLowerCase())) ||
+            (ticket.ticket_number && String(ticket.ticket_number).toLowerCase().includes(filters.search.toLowerCase())) ||
+            String(ticket.id).includes(filters.search.toLowerCase()) ||
             getRequesterLabel(ticket).toLowerCase().includes(filters.search.toLowerCase())
             : true;
 
@@ -358,6 +362,9 @@ const TaskManagement = () => {
     };
 
     const handleStatusUpdate = () => {
+        if (selectedTicket?.status === 'closed') {
+            return toast.error('Closed complaints cannot have their status changed');
+        }
         const status = statusForm.status || selectedTicket.status;
         if (!status) return toast.error('Select a status');
         statusMutation.mutate({ ticketId: selectedTicket.id, data: { ...statusForm, status } });
@@ -414,9 +421,17 @@ const TaskManagement = () => {
                     <div className="admin-tabs-list">
                         <button
                             type="button"
+                            onClick={() => setActiveTab('all')}
+                            className={`admin-tab-btn ${activeTab === 'all' ? 'active-all' : ''}`}
+                        >
+                            <LayoutGrid size={16} /> All Complaints
+                            <span className="admin-tab-count">{getTabCount('all')}</span>
+                        </button>
+                        <button
+                            type="button"
                             onClick={() => setActiveTab('pending')}
                             className={`admin-tab-btn ${activeTab === 'pending' ? 'active-pending' : ''}`}
-                            hidden={isWorker || !allowedTabs.includes('pending')}
+                            hidden={isWorker}
                         >
                             <Clock size={16} /> Pending
                             <span className="admin-tab-count">{getTabCount('pending')}</span>
@@ -425,7 +440,6 @@ const TaskManagement = () => {
                             type="button"
                             onClick={() => setActiveTab('assigned')}
                             className={`admin-tab-btn ${activeTab === 'assigned' ? 'active-assigned' : ''}`}
-                            hidden={!allowedTabs.includes('assigned')}
                         >
                             <UserPlus size={16} /> {isWorker ? 'All Assigned' : 'Assigned / In Progress'}
                             <span className="admin-tab-count">{getTabCount('assigned')}</span>
@@ -434,7 +448,7 @@ const TaskManagement = () => {
                             type="button"
                             onClick={() => setActiveTab('resolved')}
                             className={`admin-tab-btn ${activeTab === 'resolved' ? 'active-resolved' : ''}`}
-                            hidden={isWorker || !allowedTabs.includes('resolved')}
+                            hidden={isWorker}
                         >
                             <CheckCircle size={16} /> Resolved
                             <span className="admin-tab-count">{getTabCount('resolved')}</span>
@@ -493,6 +507,23 @@ const TaskManagement = () => {
                             </div>
                         )}
                     </div>
+                </div>
+
+                {/* Counter & Status Header */}
+                <div style={{ padding: '0.625rem 1.25rem', backgroundColor: '#F8FAFC', borderBottom: '1px solid #E2E8F0', fontSize: '0.8125rem', color: '#64748B', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span>
+                        Showing <strong style={{ color: '#0F172A', fontWeight: 700 }}>{prioritizedTickets.length}</strong> {prioritizedTickets.length === 1 ? 'complaint' : 'complaints'}
+                        {filters.category_id || filters.search ? ` (filtered from ${sourceTickets.length} total)` : ''}
+                    </span>
+                    {(filters.category_id || filters.search) && (
+                        <button
+                            type="button"
+                            onClick={() => setFilters({ category_id: '', assigned_to: '', search: '' })}
+                            style={{ fontSize: '0.75rem', color: '#2563EB', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                        >
+                            Reset filters
+                        </button>
+                    )}
                 </div>
 
                 {/* Table Section - Pure CSS */}
