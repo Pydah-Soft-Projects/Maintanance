@@ -191,6 +191,7 @@ const App = () => {
           <Route path="sub-admins" element={<AdminOnlyRoute><Navigate to="/user-management" replace /></AdminOnlyRoute>} />
           <Route path="roles" element={<Navigate to="/user-management?tab=roles" replace />} />
           <Route path="tickets" element={<Navigate to="/task-management" replace />} />
+          <Route path="settings" element={<Navigate to="/configuration" replace />} />
           <Route path="unauthorized" element={
             <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 text-gray-800">
               <h1 className="text-4xl font-bold mb-4">403</h1>

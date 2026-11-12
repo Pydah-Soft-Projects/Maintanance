@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { NavLink, useNavigate, Outlet } from 'react-router-dom';
+import { NavLink, useNavigate, useLocation, Outlet } from 'react-router-dom';
 import {
-    LayoutDashboard,
+    LayoutGrid,
     ClipboardList,
     Settings,
     Users,
@@ -19,6 +19,7 @@ const AdminLayout = () => {
     const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(() => window.innerWidth > 1024);
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const navigate = useNavigate();
+    const location = useLocation();
     const { user, logout, hasPermission } = useAuthStore();
 
     const handleLogout = () => {
@@ -28,23 +29,30 @@ const AdminLayout = () => {
     };
 
     const isSuperAdminOrAdmin = user?.role === 'super_admin';
-    // --- Navigation Configuration ---
+
+    // --- System Navigation Items Configuration ---
+    // Preserves our actual system pages:
+    // MAIN: Dashboard — LayoutGrid
+    // OPERATIONS: Task Management — ClipboardList
+    // ADMINISTRATION: Configuration — Settings; User Management — Users
     const allNavItems = [
         {
             id: 'dashboard',
             group: 'MAIN',
-            icon: LayoutDashboard,
+            icon: LayoutGrid,
             label: 'Dashboard',
             path: '/dashboard',
-            module: 'ticket_dashboard'
+            module: 'ticket_dashboard',
+            aliases: ['/dashboard', '/']
         },
         {
             id: 'task-management',
             group: 'OPERATIONS',
             icon: ClipboardList,
-            label: 'Complaints',
+            label: 'Task Management',
             path: '/task-management',
-            module: 'ticket_management'
+            module: 'ticket_management',
+            aliases: ['/task-management', '/tickets']
         },
         {
             id: 'configuration',
@@ -52,7 +60,8 @@ const AdminLayout = () => {
             icon: Settings,
             label: 'Configuration',
             path: '/configuration',
-            module: 'category_management'
+            module: 'category_management',
+            aliases: ['/configuration', '/settings']
         },
         {
             id: 'user-management',
@@ -60,11 +69,12 @@ const AdminLayout = () => {
             icon: Users,
             label: 'User Management',
             path: '/user-management',
-            module: 'employee_management'
+            module: 'employee_management',
+            aliases: ['/user-management', '/employees', '/roles', '/sub-admins']
         }
     ];
 
-    // Filter navigation items by user access scope
+    // Filter navigation items by role and user access permissions
     const navItems = allNavItems.filter((item) => {
         if (item.adminOnly) {
             return isSuperAdminOrAdmin;
@@ -77,7 +87,33 @@ const AdminLayout = () => {
         return hasPermission(item.module, 'read');
     });
 
-    // --- Inline Styles & Media Queries (Matching StudentLayout) ---
+    // Determine active item considering aliases
+    const isItemActive = (item) => {
+        const currentPath = location.pathname;
+
+        if (item.id === 'dashboard') {
+            return currentPath === '/dashboard' || currentPath === '/';
+        }
+        if (item.id === 'task-management') {
+            return currentPath === '/task-management' || currentPath === '/tickets';
+        }
+        if (item.id === 'configuration') {
+            return currentPath === '/configuration' || currentPath === '/settings';
+        }
+        if (item.id === 'user-management') {
+            return ['/user-management', '/employees', '/roles', '/sub-admins'].includes(currentPath);
+        }
+
+        if (item.aliases && item.aliases.includes(currentPath)) {
+            return true;
+        }
+
+        return currentPath === item.path;
+    };
+
+    const SECTIONS = ['MAIN', 'OPERATIONS', 'ADMINISTRATION'];
+
+    // --- Layout and Component Styles ---
     const styles = {
         container: {
             display: 'flex',
@@ -87,58 +123,160 @@ const AdminLayout = () => {
         },
         sidebar: {
             width: sidebarCollapsed ? '80px' : '256px',
-            backgroundColor: 'var(--sidebar)',
-            color: 'var(--sidebar-text)',
-            borderRight: '1px solid var(--border)',
+            backgroundColor: 'var(--sidebar, #1E3150)',
+            color: 'var(--sidebar-text, #FFFFFF)',
+            borderRight: '1px solid var(--border, #E2E8F0)',
+            boxShadow: '4px 0 24px -2px rgba(10, 20, 35, 0.45)',
             height: '100%',
             position: 'fixed',
             left: 0,
             top: 0,
             zIndex: 40,
-            transition: 'width 0.25s ease, transform 0.25s ease',
+            transition: 'width 200ms cubic-bezier(0.4, 0, 0.2, 1), transform 200ms cubic-bezier(0.4, 0, 0.2, 1)',
             display: 'flex',
             flexDirection: 'column',
+            justifyContent: 'space-between',
             fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+            boxSizing: 'border-box',
         },
-        logoArea: {
-            minHeight: sidebarCollapsed ? '90px' : '106px',
+        brandHeader: {
+            padding: sidebarCollapsed ? '24px 8px 16px' : '24px 24px 16px',
+            borderBottom: '1px solid var(--border, #E2E8F0)',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            padding: sidebarCollapsed ? '18px 8px 12px' : '24px 12px 16px',
-            borderBottom: '1px solid var(--border)',
             textAlign: 'center',
+            minHeight: '88px',
+            boxSizing: 'border-box',
+            position: 'relative',
         },
-        logoText: {
-            fontSize: '11px',
-            fontWeight: '700',
-            color: 'var(--sidebar-muted)',
+        subtitle: {
             marginTop: '8px',
+            fontSize: '12px',
+            fontWeight: 500,
+            color: 'var(--sidebar-muted, #AABBD4)',
             fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
-            letterSpacing: '0.01em',
+            lineHeight: 1.2,
+            letterSpacing: 'normal',
         },
         nav: {
-            padding: '16px 14px',
+            padding: '12px 14px 16px',
             overflowY: 'auto',
+            overflowX: 'hidden',
             flex: 1,
+            boxSizing: 'border-box',
+        },
+        sectionContainer: {
+            marginBottom: '24px',
+        },
+        sectionHeading: {
+            padding: '4px 14px 8px',
+            fontSize: '11px',
+            fontWeight: 700,
+            textTransform: 'uppercase',
+            letterSpacing: '0.06em',
+            color: 'var(--sidebar-muted, #AABBD4)',
+            fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+            marginBottom: '4px',
+        },
+        sectionItems: {
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '4px',
         },
         navItem: (isActive) => ({
             display: 'flex',
             alignItems: 'center',
             justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
-            gap: '12px',
-            padding: sidebarCollapsed ? '11px 0' : '11px 14px',
-            marginBottom: '4px',
+            gap: '14px',
+            width: '100%',
+            padding: sidebarCollapsed ? '10px 0' : '10px 14px',
             borderRadius: '12px',
             fontSize: '13px',
-            fontWeight: isActive ? '600' : '500',
-            color: 'var(--sidebar-text)',
-            backgroundColor: isActive ? 'var(--primary)' : 'transparent',
+            fontWeight: isActive ? 600 : 500,
+            color: 'var(--sidebar-text, #FFFFFF)',
+            backgroundColor: isActive ? 'var(--primary, #1A2517)' : 'transparent',
+            boxShadow: isActive ? '0 2px 8px -1px rgba(0, 0, 0, 0.2)' : 'none',
             textDecoration: 'none',
-            transition: 'all 0.15s ease',
-            position: 'relative',
+            boxSizing: 'border-box',
+            transition: 'background-color 150ms ease, opacity 150ms ease',
+            cursor: 'pointer',
+            fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
         }),
+        profileWrapper: {
+            padding: '14px',
+            boxSizing: 'border-box',
+            width: '100%',
+        },
+        profileCard: {
+            height: sidebarCollapsed ? 'auto' : '64px',
+            padding: sidebarCollapsed ? '10px 0' : '0 14px',
+            borderRadius: '16px',
+            background: 'color-mix(in srgb, var(--sidebar, #1E3150) 72%, var(--text-primary, #000000))',
+            border: '1px solid color-mix(in srgb, var(--sidebar-text, #FFFFFF) 18%, transparent)',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.16)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: sidebarCollapsed ? 'center' : 'space-between',
+            boxSizing: 'border-box',
+            width: '100%',
+        },
+        avatar: {
+            width: '40px',
+            height: '40px',
+            borderRadius: '50%',
+            backgroundColor: 'var(--primary-light, rgba(26, 37, 23, 0.15))',
+            color: 'var(--primary, #1A2517)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '14px',
+            fontWeight: 700,
+            flexShrink: 0,
+        },
+        userDetails: {
+            flex: 1,
+            minWidth: 0,
+            marginLeft: '12px',
+            overflow: 'hidden',
+        },
+        userName: {
+            fontSize: '13px',
+            fontWeight: 700,
+            color: 'var(--sidebar-text, #FFFFFF)',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            margin: 0,
+            lineHeight: 1.3,
+        },
+        userRole: {
+            fontSize: '11px',
+            fontWeight: 400,
+            color: 'var(--sidebar-muted, #AABBD4)',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            margin: 0,
+            lineHeight: 1.3,
+        },
+        logoutBtn: {
+            display: 'flex',
+            width: '32px',
+            height: '32px',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 0,
+            border: 0,
+            borderRadius: '8px',
+            background: 'transparent',
+            color: 'var(--sidebar-text, #FFFFFF)',
+            cursor: 'pointer',
+            flexShrink: 0,
+            marginLeft: '8px',
+            transition: 'opacity 150ms ease',
+        },
         mainContent: {
             flex: 1,
             height: '100vh',
@@ -147,32 +285,23 @@ const AdminLayout = () => {
             paddingLeft: '36px',
             paddingBottom: '100px',
             marginLeft: sidebarCollapsed ? '80px' : '256px',
-            transition: 'margin-left 0.25s ease, width 0.25s ease',
+            transition: 'margin-left 200ms cubic-bezier(0.4, 0, 0.2, 1), width 200ms cubic-bezier(0.4, 0, 0.2, 1)',
             width: sidebarCollapsed ? 'calc(100% - 80px)' : 'calc(100% - 256px)',
             maxWidth: sidebarCollapsed ? 'calc(100% - 80px)' : 'calc(100% - 256px)',
             boxSizing: 'border-box',
             minWidth: 0,
         },
-        profileCard: {
-            margin: sidebarCollapsed ? '0 8px 12px' : '0 14px 12px',
-            padding: sidebarCollapsed ? '6px 4px' : '10px',
-            borderRadius: '16px',
-            background: 'color-mix(in srgb, var(--sidebar) 72%, var(--text-primary))',
-            border: '1px solid color-mix(in srgb, var(--sidebar-text) 18%, transparent)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: sidebarCollapsed ? '4px' : '8px',
-        },
         mobileHeader: {
             display: 'none',
             height: '64px',
-            background: 'var(--navbar)',
+            background: 'var(--navbar, #FFFFFF)',
             alignItems: 'center',
             justifyContent: 'space-between',
             padding: '0 16px',
             position: 'fixed',
-            top: 0, left: 0, right: 0,
+            top: 0,
+            left: 0,
+            right: 0,
             zIndex: 45,
             color: 'var(--text-primary)',
             borderBottom: '1px solid var(--border)',
@@ -207,15 +336,48 @@ const AdminLayout = () => {
             fontWeight: '600',
         }),
         backdrop: {
-            position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.4)', zIndex: 48,
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.4)',
+            zIndex: 48,
             backdropFilter: 'blur(2px)',
         }
     };
 
     return (
         <div style={styles.container}>
-            {/* Inject CSS for Media Queries */}
+            {/* Inject CSS for Media Queries, Collapse Control & Hover Behavior */}
             <style>{`
+                .sidebar-collapse-toggle {
+                    position: absolute;
+                    right: -12px;
+                    top: 106px;
+                    z-index: 50;
+                    display: flex;
+                    width: 24px;
+                    height: 24px;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 0;
+                    border: 1px solid var(--border, #E2E8F0);
+                    border-radius: 9999px;
+                    background: var(--surface, #FFFFFF);
+                    color: var(--sidebar-muted, #AABBD4);
+                    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.16);
+                    cursor: pointer;
+                    transition: background-color 150ms ease, color 150ms ease, transform 150ms ease;
+                }
+                .sidebar-collapse-toggle:hover {
+                    color: var(--sidebar-text, #FFFFFF);
+                    background-color: var(--primary, #1A2517);
+                }
+                .sidebar-nav-link:not(.active-nav-link):hover {
+                    background-color: rgba(255, 255, 255, 0.08) !important;
+                    opacity: 0.88;
+                }
+                .sidebar-logout-btn:hover {
+                    opacity: 0.8;
+                }
                 @media (max-width: 1024px) {
                     .desktop-sidebar {
                         width: 256px !important;
@@ -237,24 +399,6 @@ const AdminLayout = () => {
                 }
                 @media (min-width: 1025px) {
                     .desktop-sidebar { display: flex !important; transform: translateX(0) !important; }
-                    .sidebar-collapse-toggle {
-                        position: absolute;
-                        right: -12px;
-                        top: 106px;
-                        z-index: 50;
-                        display: flex;
-                        width: 24px;
-                        height: 24px;
-                        align-items: center;
-                        justify-content: center;
-                        padding: 0;
-                        border: 1px solid var(--border);
-                        border-radius: 9999px;
-                        background: var(--surface);
-                        color: var(--sidebar-muted);
-                        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.16);
-                        cursor: pointer;
-                    }
                     .mobile-header { display: none !important; }
                     .mobile-bottom-bar { display: none !important; }
                 }
@@ -292,102 +436,122 @@ const AdminLayout = () => {
                 style={styles.sidebar}
                 className={`desktop-sidebar ${desktopSidebarOpen ? 'mobile-open' : ''}`}
             >
-                <div style={styles.logoArea}>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                {/* Collapse Control Button */}
+                <button
+                    type="button"
+                    onClick={() => {
+                        if (window.innerWidth <= 1024) {
+                            setDesktopSidebarOpen(false);
+                        } else {
+                            setSidebarCollapsed((collapsed) => !collapsed);
+                        }
+                    }}
+                    aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                    title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                    className="sidebar-collapse-toggle"
+                >
+                    {sidebarCollapsed ? <ChevronRight size={14} strokeWidth={2.5} /> : <ChevronLeft size={14} strokeWidth={2.5} />}
+                </button>
+
+                {/* Brand Header */}
+                <div style={styles.brandHeader}>
+                    {sidebarCollapsed ? (
                         <img
-                            src={sidebarCollapsed ? '/campo-logos/icon-192.png' : '/campo-logos/campo_logo_transparent_hq.png'}
-                            alt="Campo"
+                            src="/campo-logos/icon-192.png"
+                            alt="Campo Logo"
                             style={{
-                                height: sidebarCollapsed ? '32px' : '28px',
-                                maxWidth: sidebarCollapsed ? '40px' : '120px',
+                                width: '36px',
+                                height: '36px',
+                                borderRadius: '8px',
                                 objectFit: 'contain',
-                                flexShrink: 0,
+                                display: 'block'
                             }}
                         />
-                        {!sidebarCollapsed && <span style={styles.logoText}>Support &amp; Maintenance</span>}
-                    </div>
-                    <button
-                        type="button"
-                        onClick={() => {
-                            if (window.innerWidth <= 1024) {
-                                setDesktopSidebarOpen(false);
-                            } else {
-                                setSidebarCollapsed((collapsed) => !collapsed);
-                            }
-                        }}
-                        aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-                        title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-                        className="sidebar-collapse-toggle"
-                    >
-                        {sidebarCollapsed ? <ChevronRight size={14} strokeWidth={2.5} /> : <ChevronLeft size={14} strokeWidth={2.5} />}
-                    </button>
+                    ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                            <img
+                                src="/campo-logos/campo_logo_transparent_hq.png"
+                                alt="Campo"
+                                style={{
+                                    height: '28px',
+                                    maxWidth: '120px',
+                                    objectFit: 'contain',
+                                    display: 'block'
+                                }}
+                            />
+                            <span style={styles.subtitle}>Support &amp; Maintenance</span>
+                        </div>
+                    )}
                 </div>
 
+                {/* Navigation Sections */}
                 <nav style={styles.nav} className="custom-scrollbar">
-                    {['MAIN', 'OPERATIONS', 'ADMINISTRATION'].map((group) => {
-                        const groupItems = navItems.filter((item) => item.group === group);
-                        if (!groupItems.length) return null;
+                    {SECTIONS.map((section) => {
+                        const sectionItems = navItems.filter((item) => item.group === section);
+                        // Do not show sections that have no permitted items
+                        if (!sectionItems.length) return null;
+
                         return (
-                            <div key={group} style={{ marginBottom: '18px' }}>
+                            <div key={section} style={styles.sectionContainer}>
                                 {!sidebarCollapsed && (
-                                    <div style={{ padding: '0 10px 8px', color: 'var(--sidebar-muted)', fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em' }}>
-                                        {group}
-                                    </div>
+                                    <div style={styles.sectionHeading}>{section}</div>
                                 )}
-                                {groupItems.map((item) => {
-                                    const Icon = item.icon;
-                                    return (
-                                        <NavLink
-                                            key={item.id}
-                                            to={item.path}
-                                            title={sidebarCollapsed ? item.label : undefined}
-                                            style={({ isActive }) => styles.navItem(isActive)}
-                                        >
-                                            <Icon size={18} />
-                                            {!sidebarCollapsed && <span>{item.label}</span>}
-                                        </NavLink>
-                                    );
-                                })}
+                                <div style={styles.sectionItems}>
+                                    {sectionItems.map((item) => {
+                                        const Icon = item.icon;
+                                        const active = isItemActive(item);
+
+                                        return (
+                                            <NavLink
+                                                key={item.id}
+                                                to={item.path}
+                                                title={sidebarCollapsed ? item.label : undefined}
+                                                style={styles.navItem(active)}
+                                                className={`sidebar-nav-link ${active ? 'active-nav-link' : ''}`}
+                                            >
+                                                <Icon size={sidebarCollapsed ? 20 : 18} strokeWidth={2} />
+                                                {!sidebarCollapsed && <span>{item.label}</span>}
+                                            </NavLink>
+                                        );
+                                    })}
+                                </div>
                             </div>
                         );
                     })}
                 </nav>
 
-                {/* User Info */}
-                <div style={styles.profileCard}>
-                    <div style={{ width: sidebarCollapsed ? '28px' : '36px', height: sidebarCollapsed ? '28px' : '36px', flexShrink: 0, borderRadius: '50%', backgroundColor: 'var(--primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', fontSize: '14px', fontWeight: 'bold' }}>
-                        {(user?.name || user?.username || 'A').charAt(0).toUpperCase()}
-                    </div>
-                    {!sidebarCollapsed && <div style={{ flex: 1, overflow: 'hidden' }}>
-                        <p style={{ fontSize: '12px', fontWeight: '700', color: 'var(--sidebar-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textTransform: 'uppercase', margin: 0 }}>
-                            {user?.name || user?.username || 'Admin'}
-                        </p>
-                        <p style={{ fontSize: '10px', color: 'var(--sidebar-muted)', margin: 0 }}>
-                            {user?.role === 'super_admin' ? 'Superadmin' : user?.role?.replace(/_/g, ' ')}
-                        </p>
-                    </div>}
-                    <button
-                        type="button"
-                        onClick={handleLogout}
-                        aria-label="Sign out"
-                        title="Sign Out"
-                        style={{
-                            display: 'flex',
-                            width: sidebarCollapsed ? '20px' : '30px',
-                            height: sidebarCollapsed ? '28px' : '30px',
-                            flexShrink: 0,
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            padding: 0,
-                            border: 0,
-                            borderRadius: '8px',
-                            background: 'transparent',
-                            color: 'var(--sidebar-text)',
-                            cursor: 'pointer'
-                        }}
+                {/* Bottom User Profile */}
+                <div style={styles.profileWrapper}>
+                    <div
+                        style={styles.profileCard}
+                        title={sidebarCollapsed ? `${user?.name || user?.username || 'Admin'} (${user?.role === 'super_admin' ? 'Superadmin' : user?.role ? user.role.replace(/_/g, ' ') : 'User'})` : undefined}
                     >
-                        <LogOut size={16} />
-                    </button>
+                        <div style={styles.avatar}>
+                            {(user?.name || user?.username || 'A').charAt(0).toUpperCase()}
+                        </div>
+                        {!sidebarCollapsed && (
+                            <>
+                                <div style={styles.userDetails}>
+                                    <p style={styles.userName}>
+                                        {user?.name || user?.username || 'Admin'}
+                                    </p>
+                                    <p style={styles.userRole}>
+                                        {user?.role === 'super_admin' ? 'Superadmin' : user?.role ? user.role.replace(/_/g, ' ') : 'User'}
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={handleLogout}
+                                    aria-label="Sign out"
+                                    title="Sign Out"
+                                    style={styles.logoutBtn}
+                                    className="sidebar-logout-btn"
+                                >
+                                    <LogOut size={16} strokeWidth={2} />
+                                </button>
+                            </>
+                        )}
+                    </div>
                 </div>
             </aside>
 
@@ -404,8 +568,8 @@ const AdminLayout = () => {
                         to={item.path}
                         style={({ isActive }) => styles.mobileNavItem(isActive)}
                     >
-                        <item.icon size={24} />
-                        <span>{item.label === 'Complaints' ? 'Complaints' : item.label === 'Configuration' ? 'Settings' : item.label}</span>
+                        <item.icon size={24} strokeWidth={2} />
+                        <span>{item.label}</span>
                     </NavLink>
                 ))}
             </div>
